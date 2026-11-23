@@ -1,0 +1,21 @@
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.streamlit/secrets.toml
+
+# Donnees locales
+data/bronze/*
+!data/bronze/.gitkeep
+data/silver/*
+!data/silver/.gitkeep
+data/gold/*
+!data/gold/.gitkeep
+
+# Bases de donnees et logs
+*.duckdb
+*.db
+*.log
