@@ -131,9 +131,11 @@ L’empreinte SHA-256 mesurée avant la publication était `0274c8a547a78b4a6673
 
 Le 24 novembre 2026, l’utilisatrice a donné sa validation définitive au candidat de 5 295 lignes × 10 colonnes et accepté l’écart résiduel des effectifs du rapport qualité comme non bloquant. Le fichier validé a été publié par copie et remplacement atomique. Le rapport a été repris tel quel avec les décisions, les avant/après et les limites du benchmark. Aucun contrôle supplémentaire n’a été exécuté à la publication. [Silver définitif](../data/silver/questions_clean.parquet), [rapport qualité publié](../data/silver/rapport_qualite_silver.csv), [jalon dédoublonné archivé](../data/silver/questions_dedoublonnees.parquet)
 
+La vérification en lecture seule du 24 novembre confirme que le Parquet et le rapport publiés sont identiques aux fichiers du candidat. Le SHA-256 du Parquet publié correspond à l’empreinte du candidat ci-dessus. La relecture a vérifié les huit corrections, les 5 295 identifiants uniques, leur recalcul, la cohérence des choix et des réponses attendues, ainsi que le rattachement du rapport aux identifiants du Silver définitif.
+
 ## Prochain jalon
 
-L’échantillon de 10 % sera constitué à partir du Silver définitif lors de la prochaine étape. La commande historique `pilote` combine préparation et échantillonnage sur le jalon dédoublonné. Elle reste suspendue pour le benchmark final.
+L’échantillonnage sur le Silver définitif attend l’accord sur le protocole et la méthode. Le calcul des seuls quotas selon la méthode proposée donne 530 places, réparties sur 109 des 141 strates et les 24 catégories. La sélection des identifiants et l’écriture du nouveau manifeste se feront après accord. La commande historique `pilote` combine préparation et échantillonnage sur le jalon dédoublonné. Elle reste suspendue pour le benchmark final.
 
 Le pilote Gemma 4 E2B via LM Studio avec `P1_choices` et `P2_expert` attendra ce nouvel échantillon. Les résultats et les mesures restent à produire. [Protocole du benchmark](ARCHITECTURE.md#benchmark)
 
