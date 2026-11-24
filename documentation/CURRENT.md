@@ -1,6 +1,6 @@
 # État d’avancement
 
-Mis à jour le 24 novembre 2026. Le lot 3 est clos. L’utilisatrice a validé le Silver révisé de 5 290 lignes × 10 colonnes et la conservation des 1 060 inférences du pilote Gemma. Les mesures Bronze et les résultats Silver sont prêts à être relus séparément.
+Mis à jour le 24 novembre 2026. Le benchmark complet de Gemma 4 E2B est validé et le lot 4 est clos. Il couvre les 5 290 questions du Silver révisé par prompt et inclut les 1 060 inférences du pilote.
 
 ## Travail réalisé
 
@@ -156,7 +156,7 @@ Le script utilise Gemma 4 E2B Q4_K_M dans LM Studio `0.4.28+2`, avec le moteur V
 
 Les 1 060 tentatives ont été reprises du journal local. Les deux tables Bronze de 530 lignes conservent les réponses brutes, temps, statuts, identifiants et configurations d’origine. Les deux tables Silver de 530 lignes ont été régénérées à partir du Bronze et des réponses attendues. La comparaison ligne par ligne avec le journal confirme les mêmes valeurs, les 1 060 UUID uniques, les scores d’origine et l’ordre du manifeste. [Bronze P1](../data/bronze/gemma_p1_choices.parquet) · [Bronze P2](../data/bronze/gemma_p2_expert.parquet) · [Silver P1](../data/silver/gemma_p1_choices.parquet) · [Silver P2](../data/silver/gemma_p2_expert.parquet)
 
-Le nouveau flux a été testé hors ligne avec un journal vierge, un export vide, un délai d’attente expiré, une réponse hors format et une reprise après collecte. Le journal local d’origine est resté identique. La reconstruction et la structuration ont utilisé les mesures existantes. Les inférences restantes attendent l’accord de l’utilisatrice.
+Le nouveau flux a été testé hors ligne avec un journal vierge, un export vide, un délai d’attente expiré, une réponse hors format et une reprise après collecte. Le journal local d’origine est resté identique. La reconstruction et la structuration du lot 3 ont utilisé les mesures existantes.
 
 | Mesure | `P1_choices` | `P2_expert` |
 | --- | ---: | ---: |
@@ -173,6 +173,26 @@ Le nouveau flux a été testé hors ligne avec un journal vierge, un export vide
 
 Sur les 530 paires, 11 questions sont correctes uniquement avec `P2_expert` et huit uniquement avec `P1_choices`. L’écart d’exactitude observé est de 0,57 point en faveur de `P2_expert`. La durée active cumulée est de 12 min 51 s. En conditions comparables, l’estimation pour les deux prompts est de 2 h 08 min 16 s depuis zéro, ou 1 h 55 min 25 s pour les 4 760 questions restantes par prompt.
 
+## Benchmark Gemma du lot 4
+
+L’utilisatrice a autorisé le traitement des questions restantes. Les deux instances à 8 192 tokens ont été déchargées. L’instance `gemma-pilote-lot3` a été rechargée avec Gemma 4 E2B Q4_K_M, un contexte de 4 096 tokens et le moteur Vulkan `2.80.1`. La configuration exposée par LM Studio et les réglages d’inférence correspondent au journal du pilote.
+
+Le journal du lot 4 a repris les 1 060 tentatives du pilote et ajouté 4 760 tentatives par prompt, `P1_choices` puis `P2_expert`. Le contrôle final a vérifié l’ensemble exact des 5 290 `question_id` du corpus dans les quatre Parquet, leur ordre commun et les 10 580 identifiants d’inférence distincts. Les champs communs Bronze–Silver correspondent ligne à ligne et les résultats structurés concordent avec le scoring recalculé. [Bronze P1](../data/bronze/benchmark_lot4/gemma_p1_choices.parquet) · [Bronze P2](../data/bronze/benchmark_lot4/gemma_p2_expert.parquet) · [Silver P1](../data/silver/benchmark_lot4/gemma_p1_choices.parquet) · [Silver P2](../data/silver/benchmark_lot4/gemma_p2_expert.parquet)
+
+| Mesure | `P1_choices` | `P2_expert` |
+| --- | ---: | ---: |
+| Réponses reçues | 5 290 | 5 290 |
+| Réponses correctes | 2 863 (54,12 %) | 2 852 (53,91 %) |
+| QCM corrects sur 4 501 | 2 431 | 2 423 |
+| Vrai/faux corrects sur 789 | 432 | 429 |
+| Réponses conformes | 5 290 (100 %) | 5 290 (100 %) |
+| Erreurs techniques | 0 | 0 |
+| Latence moyenne | 0,463 s | 0,466 s |
+| Latence médiane | 0,448 s | 0,445 s |
+| Durée active avec le pilote | 2 988,84 s | 3 094,93 s |
+
+Sur les 5 290 paires, 89 questions sont correctes uniquement avec `P1_choices` et 78 uniquement avec `P2_expert`. L’écart observé est de 0,21 point en faveur de `P1_choices`. La durée active cumulée est de 1 h 41 min 24 s, dont 12 min 51 s mesurées au pilote.
+
 ## Prochain jalon
 
-Attendre la validation de l’utilisatrice avant le traitement complet ou le choix d’un deuxième modèle. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à réaliser.
+Attendre la validation de l’utilisatrice avant le choix d’un deuxième modèle. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à réaliser.

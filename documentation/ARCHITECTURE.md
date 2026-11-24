@@ -64,6 +64,10 @@ Le journal local conserve les horaires et les durées actives des segments. La r
 
 La configuration de reprise du journal pointe vers le SHA-256 du corpus actif. Les configurations par tentative conservent le SHA-256 du corpus effectivement utilisé lors de la mesure. Les 1 060 tentatives du pilote ont servi à reconstruire les deux couches. Le manifeste conserve son empreinte initiale.
 
+Pour le lot 4, `benchmark_gemma.py` copie le journal local du pilote et fixe un manifeste de 5 290 questions. L’ordre reprend les 530 rangs du pilote, puis l’ordre du Silver pour les 4 760 questions restantes. Les deux prompts partagent cet ordre. Le contrôle d’exécution compare le moteur sélectionné et la configuration effective aux paramètres du pilote. Les tables définitives sont versionnées dans `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`. Le journal et le manifeste d’exécution sont locaux.
+
+Le contrôle de clôture a retrouvé les 5 290 identifiants du corpus une fois par prompt dans chaque couche. Les deux prompts suivent le même ordre et les champs communs concordent ligne par ligne entre Bronze et Silver, avec 10 580 `inference_id` distincts. Le scoring recalculé donne 2 863 réponses correctes pour `P1_choices` et 2 852 pour `P2_expert`, avec 100 % de conformité et zéro erreur technique. [Résultats et durées définitifs](CURRENT.md#benchmark-gemma-du-lot-4)
+
 ### Gold et restitution
 
 dbt construit les indicateurs dans DuckDB. Le niveau `staging` lit, standardise et type les sources. Le niveau `intermediate` porte les jointures et les calculs intermédiaires. Le niveau `marts` expose les tables analytiques et les indicateurs destinés à Streamlit. L’application sera développée après la construction des données Gold.
@@ -96,9 +100,9 @@ Le prompt contient uniquement la consigne, `question` et les éléments de `answ
 | Erreurs techniques | Nombre et part des requêtes en échec parmi les requêtes tentées, avec ventilation par type d’erreur. Les délais d’attente expirés, erreurs HTTP et réponses API illisibles sont des erreurs techniques. |
 | Durée active | Temps mural actif par bloc, incluant les échecs et la persistance, hors échauffements et pauses entre segments. |
 
-La projection pour chaque prompt multiplie sa durée active observée par `5 290 / 530`, soit environ 9,98. L’estimation du temps restant multiplie cette durée par le nombre de questions sans réponse reçue pour ce prompt, divisé par 530. Ces projections supposent des conditions comparables. Les comparaisons par catégorie, difficulté et type indiquent leurs effectifs. Un choix uniforme au hasard donne 25 % de bonnes réponses sur un QCM à quatre choix et 50 % sur un vrai/faux.
+La projection historique du pilote multiplie sa durée active par `5 290 / 530`. L’estimation du temps restant utilisait le nombre de questions encore à mesurer, divisé par 530. Le bilan définitif cumule les durées réellement mesurées lors du pilote et du lot 4. Les comparaisons par catégorie, difficulté et type indiquent leurs effectifs. Un choix uniforme au hasard donne 25 % de bonnes réponses sur un QCM à quatre choix et 50 % sur un vrai/faux.
 
 ## Choix à arbitrer
 
 - Modèle relationnel détaillé et dictionnaire des données Gold.
-- Autorisation de l’utilisatrice avant le benchmark complet ou le choix d’un deuxième LLM.
+- Autorisation de l’utilisatrice avant le choix d’un deuxième LLM.

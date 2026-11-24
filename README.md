@@ -26,10 +26,14 @@ Télécharger les fichiers ci-dessous depuis GitHub pour les utiliser directemen
 | [`data/silver/gemma_p2_expert.parquet`](data/silver/gemma_p2_expert.parquet) | 530 résultats structurés pour `P2_expert` | 52 545 octets |
 | [`data/silver/pilot_lot2/pilot_question_ids.parquet`](data/silver/pilot_lot2/pilot_question_ids.parquet) | Manifeste définitif des 530 questions du pilote | 38 037 octets |
 | [`data/silver/pilot_lot2/manifest_metadata.json`](data/silver/pilot_lot2/manifest_metadata.json) | Empreintes du manifeste, du corpus de tirage et du Silver révisé | 991 octets |
+| [`data/bronze/benchmark_lot4/gemma_p1_choices.parquet`](data/bronze/benchmark_lot4/gemma_p1_choices.parquet) | 5 290 mesures brutes du benchmark complet pour `P1_choices` | 502 851 octets |
+| [`data/bronze/benchmark_lot4/gemma_p2_expert.parquet`](data/bronze/benchmark_lot4/gemma_p2_expert.parquet) | 5 290 mesures brutes du benchmark complet pour `P2_expert` | 502 846 octets |
+| [`data/silver/benchmark_lot4/gemma_p1_choices.parquet`](data/silver/benchmark_lot4/gemma_p1_choices.parquet) | 5 290 résultats structurés du benchmark complet pour `P1_choices` | 484 464 octets |
+| [`data/silver/benchmark_lot4/gemma_p2_expert.parquet`](data/silver/benchmark_lot4/gemma_p2_expert.parquet) | 5 290 résultats structurés du benchmark complet pour `P2_expert` | 484 459 octets |
 
 Les trois CSV de qualité utilisent le point-virgule comme séparateur. Le diagnostic et son classement documentent les propositions. Le rapport définitif indique celles qui ont été appliquées.
 
-Les fichiers du pilote Gemma sont répartis entre les mesures brutes de Bronze et les résultats structurés de Silver. Le journal DuckDB de reprise, l’essai historique, les copies du candidat final et les fichiers temporaires sont locaux.
+Les fichiers du pilote et du benchmark Gemma sont répartis entre les mesures brutes de Bronze et les résultats structurés de Silver. Les journaux DuckDB de reprise, le manifeste d’exécution du lot 4, l’essai historique, les copies du candidat final et les fichiers temporaires sont locaux.
 
 ## Source des données
 
@@ -114,6 +118,30 @@ python pilote_gemma.py executer --lm-studio-version '0.4.28+2' \
 ```
 
 Adapter les versions à l’installation utilisée. Avec le serveur Windows et le client WSL, ajouter `--curl /mnt/c/Windows/System32/curl.exe` si le port est accessible côté Windows uniquement. La reprise réutilise le journal local et la même configuration. Chaque export périodique enregistre d’abord le Bronze, puis produit le Silver correspondant. L’accord de l’utilisatrice est requis avant le benchmark complet ou le choix d’un deuxième modèle. [Protocole détaillé](documentation/ARCHITECTURE.md#benchmark)
+
+### Benchmark complet Gemma du lot 4
+
+Le benchmark complet validé de Gemma 4 E2B couvre les **5 290 questions par prompt**. Chaque prompt réutilise 530 mesures du pilote et ajoute 4 760 nouvelles mesures. Les quatre Parquet sont directement exploitables avec DuckDB. Les tables Silver se joignent à `questions_clean.parquet` par `question_id`.
+
+| Mesure | `P1_choices` | `P2_expert` |
+| --- | ---: | ---: |
+| Réponses correctes | 2 863 (54,12 %) | 2 852 (53,91 %) |
+| Réponses conformes | 5 290 (100 %) | 5 290 (100 %) |
+| Erreurs techniques | 0 | 0 |
+| Latence moyenne | 0,463 s | 0,466 s |
+| Durée active avec le pilote | 49 min 49 s | 51 min 35 s |
+
+Les commandes ci-dessous documentent la préparation et l’exécution à partir du journal local. Le lot 4 a traité les questions restantes dans l’ordre du Silver révisé, avec `P1_choices` puis `P2_expert`. [Bilan détaillé](documentation/CURRENT.md#benchmark-gemma-du-lot-4)
+
+```bash
+python benchmark_gemma.py preparer
+python benchmark_gemma.py verifier --lm-studio-version '0.4.28+2' \
+  --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1'
+python benchmark_gemma.py executer --lm-studio-version '0.4.28+2' \
+  --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1'
+```
+
+Sous WSL avec LM Studio sur Windows, passer les chemins de `lms.exe` et `curl.exe` via `--lms` et `--curl`. L’exécution vérifie la configuration et le moteur avant chaque reprise. `python benchmark_gemma.py bilan` lit les indicateurs du journal local lorsque celui-ci est fermé.
 
 ### Reproduire la collecte dans un répertoire dédié
 

@@ -39,6 +39,16 @@ __pycache__/
 !/data/silver/pilot_lot2/pilot_question_ids.parquet
 !/data/silver/pilot_lot2/manifest_metadata.json
 
+# Résultats définitifs du lot 4, un fichier par prompt et par couche.
+!/data/bronze/benchmark_lot4/
+/data/bronze/benchmark_lot4/*
+!/data/bronze/benchmark_lot4/gemma_p1_choices.parquet
+!/data/bronze/benchmark_lot4/gemma_p2_expert.parquet
+!/data/silver/benchmark_lot4/
+/data/silver/benchmark_lot4/*
+!/data/silver/benchmark_lot4/gemma_p1_choices.parquet
+!/data/silver/benchmark_lot4/gemma_p2_expert.parquet
+
 # Bases de données locales, fichiers temporaires et logs
 *.duckdb
 *.duckdb.wal

@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import os
@@ -32,6 +33,16 @@ FICHIERS_RESULTATS = {
     "P1_choices": SILVER.parent / "gemma_p1_choices.parquet",
     "P2_expert": SILVER.parent / "gemma_p2_expert.parquet",
 }
+
+
+@dataclass(frozen=True)
+class StockageInference:
+    journal: Path
+    bronze: Path
+    silver: Path
+
+
+STOCKAGE_PILOTE = StockageInference(JOURNAL, BRONZE.parent, SILVER.parent)
 SCHEMA_BRONZE = (
     ("question_id", "VARCHAR"), ("model_id", "VARCHAR"), ("prompt_id", "VARCHAR"),
     ("inference_id", "UUID"), ("pilot_order", "INTEGER"), ("segment_id", "UUID"),
@@ -265,12 +276,12 @@ def initialiser_journal(db, configuration):
     """)
 
 
-def chemin_bronze(prompt_id):
-    return BRONZE.parent / FICHIERS_RESULTATS[prompt_id].name
+def chemin_bronze(prompt_id, stockage=STOCKAGE_PILOTE):
+    return stockage.bronze / FICHIERS_RESULTATS[prompt_id].name
 
 
-def exporter_bronze(db, prompt_id, modele):
-    destination = chemin_bronze(prompt_id)
+def exporter_bronze(db, prompt_id, modele, stockage=STOCKAGE_PILOTE):
+    destination = chemin_bronze(prompt_id, stockage)
     colonnes = ", ".join(nom for nom, _ in SCHEMA_BRONZE)
     with TemporaryDirectory(dir=destination.parent) as temporaire:
         parquet = Path(temporaire) / destination.name
@@ -283,9 +294,9 @@ def exporter_bronze(db, prompt_id, modele):
         parquet.replace(destination)
 
 
-def structurer_silver(questions, prompt_id):
-    bronze = chemin_bronze(prompt_id)
-    destination = FICHIERS_RESULTATS[prompt_id]
+def structurer_silver(questions, prompt_id, stockage=STOCKAGE_PILOTE):
+    bronze = chemin_bronze(prompt_id, stockage)
+    destination = stockage.silver / FICHIERS_RESULTATS[prompt_id].name
     with duckdb.connect(":memory:") as db, TemporaryDirectory(dir=destination.parent) as temporaire:
         empreinte_bronze = empreinte_fichier(bronze)
         db.execute("CREATE TEMP TABLE tentatives_brutes AS SELECT * FROM read_parquet(?)", [str(bronze)])
@@ -327,19 +338,19 @@ def structurer_silver(questions, prompt_id):
         parquet.replace(destination)
 
 
-def exporter(db, questions, prompt_id, modele):
-    exporter_bronze(db, prompt_id, modele)
-    structurer_silver(questions, prompt_id)
+def exporter(db, questions, prompt_id, modele, stockage=STOCKAGE_PILOTE):
+    exporter_bronze(db, prompt_id, modele, stockage)
+    structurer_silver(questions, prompt_id, stockage)
 
 
-def executer_bloc(db, client, questions, prompt_id, modele, instance_id, configuration):
+def executer_bloc(db, client, questions, prompt_id, modele, instance_id, configuration, stockage=STOCKAGE_PILOTE):
     terminees = {ligne[0] for ligne in db.execute(
         "SELECT question_id FROM tentatives WHERE prompt_id = ?", [prompt_id]
     ).fetchall()}
     restantes = [(rang, question) for rang, question in enumerate(questions, 1)
                  if question["question_id"] not in terminees]
     if not restantes:
-        exporter(db, questions, prompt_id, modele)
+        exporter(db, questions, prompt_id, modele, stockage)
         return
 
     client.generer(instance_id, construire_prompt(QUESTION_ECHAUFFEMENT, "P1_choices"))
@@ -364,22 +375,19 @@ def executer_bloc(db, client, questions, prompt_id, modele, instance_id, configu
                     error_type = ?, error_message = ? WHERE inference_id = ?
             """, [*resultat, inference_id])
             if index % INTERVALLE_EXPORT == 0:
-                exporter(db, questions, prompt_id, modele)
+                exporter(db, questions, prompt_id, modele, stockage)
                 print(f"{prompt_id} · {len(terminees) + index}/{len(questions)} positions journalisées.", flush=True)
             db.execute("UPDATE segments SET active_seconds = ? WHERE segment_id = ?", [perf_counter() - debut, segment])
             if resultat[-2] in {"client_http", "instance_modele", "http_401", "http_403", "http_404"}:
                 raise RuntimeError(f"Bloc suspendu après l’erreur {resultat[-2]}.")
     finally:
-        exporter(db, questions, prompt_id, modele)
+        exporter(db, questions, prompt_id, modele, stockage)
         db.execute("UPDATE segments SET active_seconds = ?, ended_at = ? WHERE segment_id = ?",
                    [perf_counter() - debut, datetime.now(timezone.utc), segment])
     print(f"{prompt_id} · bloc terminé en {perf_counter() - debut:.2f} s.", flush=True)
 
 
-def executer(args, questions, meta):
-    if not JOURNAL.exists() and any(chemin_bronze(prompt).exists() or destination.exists()
-                                    for prompt, destination in FICHIERS_RESULTATS.items()):
-        raise ValueError("Récupérer le journal de reprise d’origine avant de reprendre des résultats existants.")
+def configuration_execution(args, meta):
     client = LMStudio(args.url, args.curl)
     modele, instance = client.choisir_modele(args.model_id)
     configurations_prompts = {
@@ -396,10 +404,18 @@ def executer(args, questions, meta):
         "lm_studio_version": args.lm_studio_version, "runtime": args.runtime,
         "transport": Path(args.curl).name, "export_every": INTERVALLE_EXPORT,
     })
-    with duckdb.connect(str(JOURNAL)) as db:
+    return client, modele, instance, configuration
+
+
+def executer(args, questions, meta, stockage=STOCKAGE_PILOTE):
+    if not stockage.journal.exists() and any(chemin_bronze(prompt, stockage).exists()
+            or (stockage.silver / fichier.name).exists() for prompt, fichier in FICHIERS_RESULTATS.items()):
+        raise ValueError("Récupérer le journal de reprise d’origine avant de reprendre des résultats existants.")
+    client, modele, instance, configuration = configuration_execution(args, meta)
+    with duckdb.connect(str(stockage.journal)) as db:
         initialiser_journal(db, configuration)
         for prompt in FICHIERS_RESULTATS:
-            executer_bloc(db, client, questions, prompt, modele["key"], instance["id"], configuration)
+            executer_bloc(db, client, questions, prompt, modele["key"], instance["id"], configuration, stockage)
 
 
 def configuration_journal(db, meta):
@@ -417,10 +433,10 @@ def reconstruire_bronze(meta):
             exporter_bronze(db, prompt, modele)
 
 
-def bilan(questions, meta):
+def bilan(questions, meta, stockage=STOCKAGE_PILOTE):
     par_id = {question["question_id"]: question for question in questions}
     rapport = {"population": meta["population"], "sample_size": len(questions), "prompts": {}}
-    with duckdb.connect(str(JOURNAL), read_only=True) as db:
+    with duckdb.connect(str(stockage.journal), read_only=True) as db:
         configuration_journal(db, meta)
         recus = {}
         for prompt in FICHIERS_RESULTATS:
@@ -476,11 +492,7 @@ def main():
     sous_commandes = parser.add_subparsers(dest="action", required=True)
     sous_commandes.add_parser("manifeste", help="Créer ou contrôler le manifeste du Silver définitif")
     lancement = sous_commandes.add_parser("executer", help="Exécuter ou reprendre les deux blocs")
-    lancement.add_argument("--url", default="http://127.0.0.1:1234")
-    lancement.add_argument("--curl", default="curl")
-    lancement.add_argument("--model-id")
-    lancement.add_argument("--lm-studio-version", required=True)
-    lancement.add_argument("--runtime", required=True)
+    ajouter_options_lm_studio(lancement)
     sous_commandes.add_parser("bilan", help="Afficher les métriques et les projections du journal")
     sous_commandes.add_parser("reconstruire-bronze", help="Exporter les mesures brutes du journal hors ligne")
     sous_commandes.add_parser("structurer", help="Reproduire les Parquet Silver à partir du Bronze hors ligne")
@@ -504,6 +516,14 @@ def main():
         print(json.dumps(bilan(questions, meta), indent=2, ensure_ascii=False))
     except (ErreurAPI, OSError, RuntimeError, ValueError) as exc:
         parser.exit(1, f"Erreur : {exc}\n")
+
+
+def ajouter_options_lm_studio(parser):
+    parser.add_argument("--url", default="http://127.0.0.1:1234")
+    parser.add_argument("--curl", default="curl")
+    parser.add_argument("--model-id")
+    parser.add_argument("--lm-studio-version", required=True)
+    parser.add_argument("--runtime", required=True)
 
 
 if __name__ == "__main__":
