@@ -6,7 +6,7 @@ Mis à jour le 24 novembre 2026. Le lot 2 est clos. L’utilisatrice a validé d
 
 - Debian sous WSL, VS Code et `.venv` opérationnels. Le dépôt GitHub a été initialisé avec le commit `cdb0286` (« Initialisation du projet et extraction Bronze »).
 - Le pilote du 23 novembre a collecté 50 questions sur 15 catégories, dont 43 QCM et 7 questions vrai/faux. Il compte 15 questions faciles, 19 intermédiaires et 16 difficiles. Les six champs sont renseignés et les libellés sont uniques. Le CSV pilote est conservé localement dans `data/bronze/questions_test_50.csv`. Il sert à vérifier le fonctionnement de la collecte.
-- La collecte complète du 23 novembre est conservée localement dans `data/bronze/questions_raw.csv`, avec son fichier de reprise ignoré par Git. Les contrôles d’exploration ont été rejoués le 24 novembre.
+- La collecte complète du 23 novembre est disponible dans `data/bronze/questions_raw.csv`. Son fichier de reprise reste ignoré par Git. Les contrôles d’exploration ont été rejoués le 24 novembre.
 - Les dossiers `data/silver/`, `data/gold/`, `dbt/` et `app/` sont prêts à accueillir les étapes suivantes. Le [README](../README.md) sert de point d’entrée et la [référence technique](ARCHITECTURE.md) consigne les choix validés.
 
 ## Contrôles Bronze du 23 novembre (collecte complète)
@@ -132,6 +132,8 @@ L’empreinte SHA-256 mesurée avant la publication était `0274c8a547a78b4a6673
 Le 24 novembre 2026, l’utilisatrice a donné sa validation définitive au candidat de 5 295 lignes × 10 colonnes et accepté l’écart résiduel des effectifs du rapport qualité comme non bloquant. Le fichier validé a été publié par copie et remplacement atomique. Le rapport a été repris tel quel avec les décisions, les avant/après et les limites du benchmark. Aucun contrôle supplémentaire n’a été exécuté à la publication. [Silver définitif](../data/silver/questions_clean.parquet), [rapport qualité publié](../data/silver/rapport_qualite_silver.csv), [jalon dédoublonné archivé](../data/silver/questions_dedoublonnees.parquet)
 
 La vérification en lecture seule du 24 novembre confirme que le Parquet et le rapport publiés sont identiques aux fichiers du candidat. Le SHA-256 du Parquet publié correspond à l’empreinte du candidat ci-dessus. La relecture a vérifié les huit corrections, les 5 295 identifiants uniques, leur recalcul, la cohérence des choix et des réponses attendues, ainsi que le rattachement du rapport aux identifiants du Silver définitif.
+
+Les trois fichiers téléchargeables depuis GitHub sont le CSV Bronze, le Parquet Silver définitif et le rapport qualité. Avant mise en ligne, leurs tailles et leurs schémas ont été vérifiés en lecture seule. La recherche de secrets et de données confidentielles dans leurs champs textuels et les métadonnées Parquet n’a relevé aucune donnée confidentielle identifiable. Le [README](../README.md#jeux-de-données-disponibles-sur-github) contient les liens et les tailles des fichiers. Le manifeste provisoire reste local.
 
 ## Prochain jalon
 

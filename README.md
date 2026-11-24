@@ -4,11 +4,25 @@ Projet du cours D42, ETL et optimisation des architectures de stockage, en M1 Bi
 
 Le projet construit un pipeline reproductible et traçable pour collecter des questions de culture générale, préparer les données et comparer des modèles de langage exécutés localement. Le benchmark sert de cas d’usage pour démontrer la maîtrise de la collecte, des contrôles qualité, de la transformation, de la modélisation, du stockage, de l’automatisation et de la restitution.
 
-Les livrables attendus sont le dépôt GitHub, une application Streamlit et une présentation orale. La collecte Bronze a été réalisée et peut être explorée à partir du CSV local. Le [suivi d’avancement](documentation/CURRENT.md) précise les étapes réalisées et les prochaines étapes.
+Les livrables attendus sont le dépôt GitHub, une application Streamlit et une présentation orale. Le [suivi d’avancement](documentation/CURRENT.md) précise les étapes réalisées et les prochaines étapes.
+
+## Jeux de données disponibles sur GitHub
+
+Télécharger les fichiers ci-dessous depuis GitHub pour les utiliser directement, sans relancer la collecte ni la préparation Silver.
+
+| Fichier | Contenu | Taille |
+| --- | --- | ---: |
+| [`data/bronze/questions_raw.csv`](data/bronze/questions_raw.csv) | Collecte OpenTDB brute, 5 299 questions et 6 colonnes | 895 318 octets |
+| [`data/silver/questions_clean.parquet`](data/silver/questions_clean.parquet) | Corpus Silver définitif, 5 295 questions et 10 colonnes | 965 196 octets |
+| [`data/silver/rapport_qualite_silver.csv`](data/silver/rapport_qualite_silver.csv) | Rapport qualité définitif, 1 035 entrées d’arbitrage au format CSV séparé par des points-virgules | 817 580 octets |
+
+Le manifeste d’échantillonnage `data/silver/pilot_question_ids.parquet` et l’export Parquet des résultats LLM `data/silver/inference_results.parquet` pourront être versionnés après validation et contrôle de leurs versions définitives. Le manifeste de l’essai, les autres fichiers intermédiaires et l’état de reprise restent locaux.
 
 ## Source des données
 
 Open Trivia Database fournit une API JSON publique sans clé, sous licence CC BY-SA 4.0. Elle autorise jusqu’à 50 questions par appel, avec un intervalle de 5 secondes entre deux appels d’une même adresse IP. Les jetons de session permettent à l’API de suivre les questions déjà renvoyées pendant la collecte. [Documentation OpenTDB](https://opentdb.com/api_config.php)
+
+Les jeux Bronze et Silver sont redistribués sous la licence [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), avec attribution à Open Trivia Database et à ses contributeurs. En Silver, les questions ont été dédoublonnées, normalisées, corrigées selon le rapport qualité et enrichies pour le benchmark.
 
 ## Installation sous Debian (WSL)
 
@@ -24,13 +38,13 @@ python -m pip install requests pandas
 
 ### Examiner la collecte existante
 
-Si le CSV local `data/bronze/questions_raw.csv` est présent, lancer depuis la racine du dépôt.
+Depuis la racine du dépôt, lancer l’exploration du CSV Bronze versionné.
 
 ```bash
 python exploration.py
 ```
 
-Le script affiche la volumétrie, la complétude, les répartitions et les questions aux libellés répétés. Les fichiers de données et l’état de reprise restent locaux.
+Le script affiche la volumétrie, la complétude, les répartitions et les questions aux libellés répétés.
 
 ### Préparer les questions Silver
 

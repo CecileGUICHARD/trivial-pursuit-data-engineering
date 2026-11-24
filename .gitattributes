@@ -1,0 +1,3 @@
+# Conserver les octets et les fins de ligne d’origine des CSV publiés.
+/data/bronze/questions_raw.csv -text whitespace=cr-at-eol
+/data/silver/rapport_qualite_silver.csv -text whitespace=cr-at-eol

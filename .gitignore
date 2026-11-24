@@ -1,21 +1,38 @@
 # Environnement Python
 .venv/
+venv/
 __pycache__/
 *.pyc
 
 # Secrets
 .env
+.env.*
 .streamlit/secrets.toml
+*.pem
+*.key
 
-# Donnees locales
-data/bronze/*
-!data/bronze/.gitkeep
-data/silver/*
-!data/silver/.gitkeep
-data/gold/*
-!data/gold/.gitkeep
+# Données locales et livrables publiés
+/data/bronze/*
+!/data/bronze/.gitkeep
+!/data/bronze/questions_raw.csv
+/data/silver/*
+!/data/silver/.gitkeep
+!/data/silver/questions_clean.parquet
+!/data/silver/rapport_qualite_silver.csv
+/data/gold/*
+!/data/gold/.gitkeep
 
-# Bases de donnees et logs
+# Décommenter chaque exception après validation du fichier définitif.
+#!/data/silver/pilot_question_ids.parquet
+#!/data/silver/inference_results.parquet
+
+# Bases de données locales, fichiers temporaires et logs
 *.duckdb
+*.duckdb.wal
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.tmp
+*.temp
 *.log
