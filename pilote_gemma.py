@@ -523,12 +523,12 @@ def comparer_reponses(p1, p2):
     }
 
 
-def bilan(questions, meta, stockage=STOCKAGE_PILOTE, *, inclure_p3=False):
+def bilan(questions, meta, stockage=STOCKAGE_PILOTE, *, inclure_p3=False, stockage_p3=STOCKAGE_P3):
     statistiques, recus = mesures_bilan(questions, meta, stockage, PROMPTS_HISTORIQUES)
     rapport = {"population": meta["population"], "sample_size": len(questions), "prompts": statistiques}
     rapport["apparie"] = comparer_reponses(*recus.values())
     if inclure_p3:
-        statistiques_p3, recus_p3 = mesures_bilan(questions, meta, STOCKAGE_P3, (PROMPT_P3,))
+        statistiques_p3, recus_p3 = mesures_bilan(questions, meta, stockage_p3, (PROMPT_P3,))
         statistiques.update(statistiques_p3)
         recus.update(recus_p3)
         rapport["paires"] = [

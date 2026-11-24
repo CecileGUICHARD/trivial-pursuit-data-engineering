@@ -101,7 +101,7 @@ La commande historique `preparer_silver.py pilote` reste suspendue. Les deux fic
 | `questions_benchmark.parquet` | 5 295 questions normalisées, identifiants stables, propositions ordonnées et lettres attendues |
 | `pilot_question_ids.parquet` | 530 identifiants tirés avec la seed 42 par catégorie, difficulté et type, dans l’ordre du pilote |
 
-Le pilote clôturé utilise les mêmes 530 questions avec `P1_choices` et `P2_expert`. Toutes appartiennent au Silver révisé. Pour vérifier le manifeste et reproduire les résultats Silver à partir des Parquet Bronze, lancer avec `.venv` activé.
+Les trois prompts utilisent les mêmes 530 questions, toutes issues du Silver révisé. Pour vérifier le manifeste et reproduire les résultats Silver historiques de `P1_choices` et `P2_expert` à partir des Parquet Bronze, lancer avec `.venv` activé.
 
 ```bash
 python pilote_gemma.py manifeste
@@ -121,17 +121,18 @@ Adapter les versions à l’installation utilisée. Avec le serveur Windows et l
 
 ### Benchmark complet Gemma du lot 4
 
-Le benchmark complet validé de Gemma 4 E2B couvre les **5 290 questions par prompt**. Chaque prompt réutilise 530 mesures du pilote et ajoute 4 760 nouvelles mesures. Les quatre Parquet sont directement exploitables avec DuckDB. Les tables Silver se joignent à `questions_clean.parquet` par `question_id`.
+Le benchmark complet de Gemma 4 E2B couvre les **5 290 mêmes questions pour chacun des trois prompts**. Chaque prompt réutilise 530 mesures du pilote et ajoute 4 760 nouvelles mesures. Les Parquet sont directement exploitables avec DuckDB. Les tables Silver se joignent à `questions_clean.parquet` par `question_id`.
 
-| Mesure | `P1_choices` | `P2_expert` |
-| --- | ---: | ---: |
-| Réponses correctes | 2 863 (54,12 %) | 2 852 (53,91 %) |
-| Réponses conformes | 5 290 (100 %) | 5 290 (100 %) |
-| Erreurs techniques | 0 | 0 |
-| Latence moyenne | 0,463 s | 0,466 s |
-| Durée active avec le pilote | 49 min 49 s | 51 min 35 s |
+| Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
+| --- | ---: | ---: | ---: |
+| Réponses correctes | 2 863 (54,12 %) | 2 852 (53,91 %) | 2 753 (52,04 %) |
+| Réponses conformes | 5 290 (100 %) | 5 290 (100 %) | 5 235 (98,96 %) |
+| Erreurs techniques | 0 | 0 | 0 |
+| Latence moyenne | 0,463 s | 0,466 s | 0,522 s |
+| Latence médiane | 0,448 s | 0,445 s | 0,491 s |
+| Durée active avec le pilote | 49 min 49 s | 51 min 35 s | 55 min 41 s |
 
-Les commandes ci-dessous documentent la préparation et l’exécution à partir du journal local. Le lot 4 a traité les questions restantes dans l’ordre du Silver révisé, avec `P1_choices` puis `P2_expert`. [Bilan détaillé](documentation/CURRENT.md#benchmark-gemma-du-lot-4)
+Les commandes ci-dessous documentent la préparation et l’exécution à partir du journal local. `P1_choices` puis `P2_expert` ont traité les questions restantes dans l’ordre du Silver révisé. P3 a repris le même ordre lors de son propre bloc. [Bilan détaillé](documentation/CURRENT.md#comparaison-complète-des-trois-prompts)
 
 ```bash
 python benchmark_gemma.py preparer
@@ -142,6 +143,14 @@ python benchmark_gemma.py executer --lm-studio-version '0.4.28+2' \
 ```
 
 Sous WSL avec LM Studio sur Windows, passer les chemins de `lms.exe` et `curl.exe` via `--lms` et `--curl`. L’exécution vérifie la configuration et le moteur avant chaque reprise. `python benchmark_gemma.py bilan` lit les indicateurs du journal local lorsque celui-ci est fermé.
+
+La reprise P3 utilise le manifeste complet du lot 4 et les 530 mesures de son propre pilote. Les Parquet P3 complets sont locaux. Ils ont le même nom, `gemma_p3_expert_advanced.parquet`, dans les répertoires `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`.
+
+```bash
+python benchmark_gemma.py executer --p3 --lm-studio-version '0.4.28+2' \
+  --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1' --lms lms.exe --curl curl.exe
+python benchmark_gemma.py bilan --p3
+```
 
 ### Reproduire la collecte dans un répertoire dédié
 
