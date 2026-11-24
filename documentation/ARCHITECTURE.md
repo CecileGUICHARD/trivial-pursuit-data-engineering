@@ -76,7 +76,7 @@ Le contrôle de clôture a retrouvé les 5 290 identifiants du corpus une fois
 
 dbt construit les indicateurs dans DuckDB. Le niveau `staging` lit, standardise et type les sources. Le niveau `intermediate` porte les jointures et les calculs intermédiaires. Le niveau `marts` expose les tables analytiques et les indicateurs destinés à Streamlit. L’application sera développée après la construction des données Gold.
 
-Pour la comparaison Gold, `staging` référencera uniquement les exports Silver des benchmarks complets validés, à commencer par les trois Parquet Gemma du lot 4. Les mesures de Bonsai 27B sont des données partielles conservées pour la traçabilité sous `data/bronze/pilote_bonsai/` et `data/silver/pilote_bonsai/`. Ces répertoires sont exclus des sources de la comparaison Gold et leurs mesures ne contribuent à aucun de ses indicateurs.
+Pour la comparaison Gold, `staging` référencera uniquement les exports Silver des benchmarks complets validés, à commencer par les trois Parquet Gemma du lot 4. Les pilotes Bonsai et Qwen sont conservés pour la traçabilité sous `pilote_bonsai/` et `pilote_qwen/` dans chaque couche. Ces répertoires sont exclus des sources de la comparaison Gold.
 
 ### Benchmark
 
@@ -151,6 +151,14 @@ LM Studio a choisi automatiquement la répartition CPU/GPU sur l’Intel Core i5
 `pilote_bonsai.py executer` vérifie le moteur sélectionné et la configuration de l’instance, puis réutilise le client HTTP, le journal DuckDB, les exports Bronze et la structuration Silver. Chaque appel mesuré utilise un seul texte et `store=false`. Les réglages d’inférence, le délai HTTP de 60 s et l’échauffement synthétique avant chaque bloc suivent le protocole Gemma. Les artefacts du pilote sont locaux, sous [Bronze](../data/bronze/pilote_bonsai/) et [Silver](../data/silver/pilote_bonsai/). Chaque couche contient un Parquet `bonsai_*.parquet` par prompt exécuté. Le journal `pilot.duckdb` de Silver conserve les réglages et les mesures de chaque tentative. [Exécution du pilote](../pilote_bonsai.py)
 
 `pilote_bonsai.py bilan` lit le journal et calcule les projections de durée active pour les blocs complets. Il reproduit aussi l’extrapolation globale du pilote arrêté en multipliant la latence moyenne des 41 réponses reçues par les 15 870 inférences prévues sur les trois prompts. [Calcul et limites](CURRENT.md#pilote-bonsai-27b-arrêté-et-modèle-abandonné)
+
+### Pilote Qwen3-4B-Instruct-2507
+
+Le test de faisabilité utilise `qwen/qwen3-4b-2507@q4_k_m` avec l’identifiant `qwen-benchmark-lot4`, le contexte de 4 096 tokens et le moteur `llama.cpp-win-x86_64-vulkan-avx2@2.80.1` sous LM Studio `0.4.28+2`. Le fichier `Qwen3-4B-Instruct-2507-Q4_K_M.gguf` pèse 2 497 459 753 octets. Son SHA-256 `8cdb57cbb880d313736a9bc4e3d3d2485f145b5e19cf33783746e753e82641fc` concorde avec celui publié par LM Studio Community. [Fiche LM Studio](https://lmstudio.ai/models/qwen/qwen3-4b-2507) · [Empreinte publiée du GGUF](https://huggingface.co/lmstudio-community/Qwen3-4B-Instruct-2507-GGUF/blob/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf)
+
+`pilote_qwen.py executer` lit le manifeste Bonsai d’origine, contrôle son empreinte et vérifie le moteur et l’instance. Il envoie une requête indépendante par question via `POST /api/v1/chat`, dans l’ordre du manifeste, et effectue un échauffement synthétique avant chaque bloc. Le client commun reprend les gabarits, les choix ordonnés, le scoring strict et les paramètres Gemma. Le champ `reasoning` est omis pour la variante Instruct, qui fonctionne uniquement sans mode de réflexion. Les autres réglages de génération, `stream=false`, `store=false` et le délai HTTP de 60 s suivent le protocole Gemma. [Script d’exécution](../pilote_qwen.py)
+
+Le journal `pilot.duckdb` et les six Parquet `qwen_*.parquet` restent locaux dans les répertoires `pilote_qwen/` des deux couches. `pilote_qwen.py bilan` recalcule les métriques et extrapole la durée à partir du temps actif observé dans chacun des trois blocs. Le test validé couvre 30 questions par prompt. Le benchmark complet Qwen est en attente de décision. Le choix définitif du deuxième modèle interviendra après le test de Ministral 3 3B. [Résultats du test](CURRENT.md#test-de-faisabilité-qwen3-4b-instruct-2507)
 
 ## Choix à arbitrer
 

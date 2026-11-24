@@ -257,6 +257,31 @@ Les mesures et la tentative interrompue sont conservées dans le journal DuckDB 
 
 Les résultats partiels Bonsai sont conservés localement pour la traçabilité. La future comparaison Gold des benchmarks complets exclura l’ensemble de ces mesures. [Périmètre Gold](ARCHITECTURE.md#gold-et-restitution)
 
+## Test de faisabilité Qwen3-4B-Instruct-2507
+
+L’utilisatrice a validé les résultats du test de faisabilité. Les 90 inférences sont conservées localement, y compris les 31 réponses hors format.
+
+Qwen a remplacé Bonsai pour le test de faisabilité du 24 novembre 2026. Les 90 inférences ont repris les 30 questions du manifeste Bonsai, dans le même ordre, avec les trois prompts et les choix d’origine. L’instance `qwen-benchmark-lot4` a chargé le GGUF Q4_K_M en 9,95 s avec un contexte de 4 096 tokens dans LM Studio `0.4.28+2` et le moteur Vulkan `2.80.1`. Les réglages Gemma compatibles ont été repris. La variante Instruct fonctionne uniquement sans mode de réflexion, ce qui rend le champ `reasoning` inutile. [Configuration et reproduction](ARCHITECTURE.md#pilote-qwen3-4b-instruct-2507)
+
+| Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
+| --- | ---: | ---: | ---: |
+| Réponses reçues | 30/30 | 30/30 | 30/30 |
+| Réponses correctes au scoring strict | 15 (50,0 %) | 14 (46,7 %) | 0 (0 %) |
+| Réponses conformes | 30 (100 %) | 29 (96,7 %) | 0 (0 %) |
+| Erreurs techniques | 0 | 0 | 0 |
+| Latence HTTP moyenne | 0,893 s | 0,827 s | 3,300 s |
+| Latence HTTP médiane | 0,838 s | 0,773 s | 3,209 s |
+| Durée active de 30 tentatives | 30,49 s | 27,72 s | 102,40 s |
+| Projection sur 5 290 tentatives | 1 h 29 min 37 s | 1 h 21 min 28 s | 5 h 00 min 57 s |
+
+L’unique réponse P2 hors format est `D. Seiren` au rang 23. Les 30 sorties P3 contiennent du texte explicatif et atteignent chacune le plafond de 16 tokens d’après le journal LM Studio. Même lorsqu’une réponse commence par `False`, l’explication qui suit invalide le format strict. Les 31 sorties hors format sont conservées en Bronze et comptées comme incorrectes en Silver.
+
+Les trois blocs cumulent **2 min 40,61 s** de temps actif. L’extrapolation par prompt donne **7 h 52 min 02 s** pour les 15 870 tentatives depuis zéro, ou **7 h 49 min 21 s** pour les 15 780 restantes en réutilisant les 90 mesures. Le calcul applique la durée active des 30 tentatives de chaque bloc à 5 290 ou 5 260 tentatives. Il inclut la persistance, exclut le chargement et les échauffements et suppose des conditions comparables. L’échantillon de 30 questions donne un ordre de grandeur.
+
+Un relevé ponctuel pendant le pilote indiquait environ 256 Mio de mémoire physique disponible sur les 15,75 Gio de Windows et 3,70 Gio de mémoire privée engagée par `llama-server`. À la fin du pilote, la mémoire physique disponible mesurée est passée d’environ 610 Mio à 5,67 Gio après déchargement. LM Studio a confirmé que la liste des instances chargées était alors vide.
+
+L’audit du journal LM Studio confirme 90 requêtes mesurées et trois échauffements, chacun avec un seul message, `store=false`, sans identifiant de réponse précédente. Les extraits d’`input` concordent avec les prompts attendus. La relecture du journal DuckDB et des six Parquet vérifie les 90 identifiants distincts, l’ordre du manifeste, les champs communs Bronze–Silver et le scoring recalculé. Les SHA-256 des 49 fichiers Bronze et Silver présents avant le pilote concordent, y compris toutes les données Gemma et Bonsai. [Mesures Bronze](../data/bronze/pilote_qwen/) · [Résultats Silver](../data/silver/pilote_qwen/) · [Journal DuckDB](../data/silver/pilote_qwen/pilot.duckdb)
+
 ## Prochain jalon
 
-Le choix d’un autre modèle local reste ouvert. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à traiter.
+Le benchmark complet Qwen est en attente de décision. Le prochain jalon est le test de faisabilité de Ministral 3 3B avant le choix définitif du deuxième modèle. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à traiter.

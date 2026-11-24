@@ -183,6 +183,8 @@ class ErreurAPI(Exception):
 
 
 class LMStudio:
+    parametres = PARAMETRES
+
     def __init__(self, adresse, curl):
         url = urlsplit(adresse)
         if (url.scheme != "http" or url.hostname not in {"127.0.0.1", "localhost", "::1"}
@@ -256,7 +258,7 @@ class LMStudio:
         return informations, instances[0]
 
     def generer(self, instance_id, prompt):
-        reponse, duree = self.requete("chat", {"model": instance_id, "input": prompt, **PARAMETRES})
+        reponse, duree = self.requete("chat", {"model": instance_id, "input": prompt, **self.parametres})
         try:
             if reponse["model_instance_id"] != instance_id:
                 raise ErreurAPI("instance_modele", "LM Studio a utilisé une autre instance de modèle.", duree)
@@ -423,7 +425,7 @@ def configuration_execution(args, meta, prompts=PROMPTS_HISTORIQUES, *, client=N
     configuration = json_compact({
         "dataset_sha256": meta["dataset_sha256"], "manifest_sha256": meta["manifest_sha256"],
         "prompt_sha256": configurations_prompts, "model": modele, "instance": instance,
-        "generation": PARAMETRES, "timeout_seconds": DELAI, "api": f"{client.adresse}/api/v1/chat",
+        "generation": client.parametres, "timeout_seconds": DELAI, "api": f"{client.adresse}/api/v1/chat",
         "lm_studio_version": args.lm_studio_version, "runtime": args.runtime,
         "transport": Path(args.curl).name, "export_every": INTERVALLE_EXPORT,
     })
