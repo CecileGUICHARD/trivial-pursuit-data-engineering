@@ -76,7 +76,7 @@ Le contrôle de clôture a retrouvé les 5 290 identifiants du corpus une fois
 
 dbt construit les indicateurs dans DuckDB. Le niveau `staging` lit, standardise et type les sources. Le niveau `intermediate` porte les jointures et les calculs intermédiaires. Le niveau `marts` expose les tables analytiques et les indicateurs destinés à Streamlit. L’application sera développée après la construction des données Gold.
 
-Pour la comparaison Gold, `staging` référencera uniquement les exports Silver des benchmarks complets validés, à commencer par les trois Parquet Gemma du lot 4. Les pilotes Bonsai et Qwen sont conservés pour la traçabilité sous `pilote_bonsai/` et `pilote_qwen/` dans chaque couche. Ces répertoires sont exclus des sources de la comparaison Gold.
+Pour la comparaison Gold, `staging` référencera les exports Silver complets et validés du lot 4, avec trois Parquet par modèle pour Gemma et Ministral. Les répertoires `pilote_bonsai/`, `pilote_qwen/` et `pilote_ministral/` restent locaux pour la traçabilité. Les mesures des pilotes Bonsai et Qwen sont exclues des sources Gold. [Arbitrage du deuxième modèle](CURRENT.md#choix-définitif-du-deuxième-modèle)
 
 ### Benchmark
 
@@ -158,7 +158,17 @@ Le test de faisabilité utilise `qwen/qwen3-4b-2507@q4_k_m` avec l’identifiant
 
 `pilote_qwen.py executer` lit le manifeste Bonsai d’origine, contrôle son empreinte et vérifie le moteur et l’instance. Il envoie une requête indépendante par question via `POST /api/v1/chat`, dans l’ordre du manifeste, et effectue un échauffement synthétique avant chaque bloc. Le client commun reprend les gabarits, les choix ordonnés, le scoring strict et les paramètres Gemma. Le champ `reasoning` est omis pour la variante Instruct, qui fonctionne uniquement sans mode de réflexion. Les autres réglages de génération, `stream=false`, `store=false` et le délai HTTP de 60 s suivent le protocole Gemma. [Script d’exécution](../pilote_qwen.py)
 
-Le journal `pilot.duckdb` et les six Parquet `qwen_*.parquet` restent locaux dans les répertoires `pilote_qwen/` des deux couches. `pilote_qwen.py bilan` recalcule les métriques et extrapole la durée à partir du temps actif observé dans chacun des trois blocs. Le test validé couvre 30 questions par prompt. Le benchmark complet Qwen est en attente de décision. Le choix définitif du deuxième modèle interviendra après le test de Ministral 3 3B. [Résultats du test](CURRENT.md#test-de-faisabilité-qwen3-4b-instruct-2507)
+Le journal `pilot.duckdb` et les six Parquet `qwen_*.parquet` restent locaux dans les répertoires `pilote_qwen/` des deux couches. `pilote_qwen.py bilan` recalcule les métriques et extrapole la durée à partir du temps actif observé dans chacun des trois blocs. Le test validé couvre 30 questions par prompt. La comparaison Gold exclut les mesures Qwen à la suite de la sélection de Ministral. [Résultats du test](CURRENT.md#test-de-faisabilité-qwen3-4b-instruct-2507)
+
+### Pilote Ministral-3-3B-Instruct-2512
+
+Le test utilise `mistralai/ministral-3-3b@q4_k_m`, chargé sous `ministral-benchmark-lot4` avec un contexte de 4 096 tokens, LM Studio `0.4.28+2` et le moteur `llama.cpp-win-x86_64-vulkan-avx2@2.80.1`. Le fichier texte `Ministral-3-3B-Instruct-2512-Q4_K_M.gguf` pèse 2 146 498 240 octets. Son SHA-256 `ee46f8f2cc4acf15e89699563e23b4a3919dce2e9ce7c44b53778d6590318e96` concorde avec l’empreinte publiée. LM Studio a aussi chargé le projecteur multimodal F16. Les requêtes transmettent uniquement du texte. [Fiche LM Studio](https://lmstudio.ai/models/mistralai/ministral-3-3b) · [Empreinte publiée du GGUF](https://huggingface.co/lmstudio-community/Ministral-3-3B-Instruct-2512-GGUF/blob/main/Ministral-3-3B-Instruct-2512-Q4_K_M.gguf)
+
+Le moteur a initialisé quatre créneaux de 4 096 tokens. Il a désactivé Flash Attention sur les lignes K/V après un avertissement de compatibilité Vulkan. Le pilote a envoyé les requêtes une par une.
+
+`pilote_ministral.py executer` contrôle l’empreinte du manifeste commun de 30 questions, le moteur, la variante et l’instance chargée. Il lance les trois blocs dans l’ordre P1, P2, P3 avec les gabarits, les choix ordonnés et le scoring strict de Gemma. Le client envoie un seul texte par requête, fixe `store=false` et conserve le plafond de 16 tokens ainsi que le délai HTTP de 60 s. Le champ `reasoning` est omis car la variante Instruct n’expose aucun réglage de réflexion. Un échauffement synthétique précède chaque bloc. [Script d’exécution](../pilote_ministral.py)
+
+Le journal DuckDB du pilote et les relevés mémoire Windows sont dans `data/silver/pilote_ministral/`. Chaque couche conserve un Parquet `ministral_*.parquet` par prompt. `pilote_ministral.py bilan` relit le journal et projette le temps actif par prompt sur 5 290 questions depuis zéro ou 5 260 après reprise du pilote. Chaque projection inclut la persistance des résultats. Le chargement et les échauffements ont lieu hors temps actif. [Résultats et comparatif](CURRENT.md#test-de-faisabilité-ministral-3-3b-instruct-2512)
 
 ## Choix à arbitrer
 

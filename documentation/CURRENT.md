@@ -1,6 +1,6 @@
 # État d’avancement
 
-Mis à jour le 24 novembre 2026. L’utilisatrice a validé définitivement le benchmark Gemma 4 E2B sur les 5 290 mêmes questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`. Les 15 870 mesures comprennent les 1 590 inférences des pilotes. Le benchmark Gemma est clos.
+Mis à jour le 25 novembre 2026. L’utilisatrice a validé définitivement le benchmark Gemma 4 E2B sur les 5 290 mêmes questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`. Les 15 870 mesures comprennent les 1 590 inférences des pilotes. Le benchmark Gemma est clos.
 
 ## Travail réalisé
 
@@ -282,6 +282,58 @@ Un relevé ponctuel pendant le pilote indiquait environ 256 Mio de mémoire phys
 
 L’audit du journal LM Studio confirme 90 requêtes mesurées et trois échauffements, chacun avec un seul message, `store=false`, sans identifiant de réponse précédente. Les extraits d’`input` concordent avec les prompts attendus. La relecture du journal DuckDB et des six Parquet vérifie les 90 identifiants distincts, l’ordre du manifeste, les champs communs Bronze–Silver et le scoring recalculé. Les SHA-256 des 49 fichiers Bronze et Silver présents avant le pilote concordent, y compris toutes les données Gemma et Bonsai. [Mesures Bronze](../data/bronze/pilote_qwen/) · [Résultats Silver](../data/silver/pilote_qwen/) · [Journal DuckDB](../data/silver/pilote_qwen/pilot.duckdb)
 
+## Test de faisabilité Ministral-3-3B-Instruct-2512
+
+Le 24 novembre 2026, le test a exécuté les 90 inférences sur les mêmes 30 questions que Bonsai et Qwen, dans le même ordre et avec les trois gabarits d’origine. L’instance `ministral-benchmark-lot4` a chargé le GGUF Instruct Q4_K_M en 9,19 s avec un contexte de 4 096 tokens dans LM Studio `0.4.28+2` et le moteur Vulkan `2.80.1`. Le plafond de sortie était de 16 tokens. Le déchargement a été confirmé par l’API LM Studio. [Configuration et reproduction](ARCHITECTURE.md#pilote-ministral-3-3b-instruct-2512)
+
+| Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
+| --- | ---: | ---: | ---: |
+| Réponses reçues | 30/30 | 30/30 | 30/30 |
+| Bonnes réponses | 12 | 12 | 9 |
+| Mauvaises réponses | 18 | 18 | 21 |
+| Exactitude stricte | 40,0 % | 40,0 % | 30,0 % |
+| Réponses conformes | 30 (100 %) | 30 (100 %) | 22 (73,3 %) |
+| Erreurs techniques | 0 | 0 | 0 |
+| Latence HTTP moyenne | 0,769 s | 0,795 s | 1,425 s |
+| Latence HTTP médiane | 0,749 s | 0,786 s | 0,876 s |
+| Durée active | 26,18 s | 27,03 s | 46,32 s |
+| Projection sur 5 290 tentatives | 1 h 16 min 56 s | 1 h 19 min 26 s | 2 h 16 min 08 s |
+| Projection sur les 5 260 restantes | 1 h 16 min 29 s | 1 h 18 min 59 s | 2 h 15 min 22 s |
+
+Les huit sorties P3 hors format concernent les QCM aux rangs 5, 6, 8, 15, 20, 24, 27 et 30. Elles ajoutent la formule `The correct answer is` et du Markdown autour de la lettre, parfois accompagnée du texte du choix. Cinq atteignent le plafond de 16 tokens et trois s’arrêtent à 9 tokens. Le scoring strict compte les huit comme incorrectes, y compris les trois qui contiennent la lettre attendue. Les trois vrai/faux sont conformes. Qwen avait produit 30 réponses hors format sur ce bloc.
+
+Les trois blocs cumulent **1 min 39,52 s** de temps actif. La projection est de **4 h 52 min 29 s** pour les 15 870 tentatives depuis zéro, ou **4 h 50 min 50 s** pour les 15 780 restantes en réutilisant le pilote. Le calcul applique la durée active de chaque bloc de 30 tentatives au volume correspondant. Il inclut la persistance et exclut le chargement et les échauffements. Les projections supposent des conditions comparables et donnent un ordre de grandeur à partir de 30 questions par prompt.
+
+Sur les 20 relevés Windows pris pendant le pilote, la mémoire physique disponible a atteint un minimum de 494 Mio sur 15,75 Gio. Le processus `llama-server` a atteint 3,70 Gio de mémoire privée engagée et 5,35 Gio d’ensemble de travail. Les compteurs se lisent séparément. La mémoire physique disponible était de 5,83 Gio avant chargement et de 6,61 Gio après déchargement. [Relevés mémoire](../data/silver/pilote_ministral/memoire.jsonl)
+
+L’audit des journaux LM Studio retrouve 90 requêtes mesurées et trois échauffements avec un seul message, `store=false`, sans identifiant de réponse précédente. Les extraits d’`input` concordent avec les prompts attendus, et les réponses du serveur concordent avec le journal DuckDB. La relecture des six Parquet confirme 90 identifiants d’inférence distincts, l’ordre du manifeste, l’égalité des champs communs Bronze–Silver et le scoring recalculé. Les empreintes SHA-256 des 56 fichiers Bronze et Silver préexistants concordent. [Mesures Bronze](../data/bronze/pilote_ministral/) · [Résultats Silver](../data/silver/pilote_ministral/) · [Journal DuckDB](../data/silver/pilote_ministral/pilot.duckdb)
+
+### Comparaison des trois tests de faisabilité
+
+| Modèle | Prompt | Bonnes réponses | Conformité | Latence moyenne / médiane | Durée active |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Bonsai 27B | P1 | 17/30 (56,7 %) | 30/30 (100 %) | 14,812 / 16,143 s | 449,76 s |
+| Bonsai 27B | P2 | 6/11 (54,5 %) | 11/11 (100 %) | 16,330 / 15,881 s | 193,28 s |
+| Bonsai 27B | P3 | — | — | — | — |
+| Qwen3 4B Instruct | P1 | 15/30 (50,0 %) | 30/30 (100 %) | 0,893 / 0,838 s | 30,49 s |
+| Qwen3 4B Instruct | P2 | 14/30 (46,7 %) | 29/30 (96,7 %) | 0,827 / 0,773 s | 27,72 s |
+| Qwen3 4B Instruct | P3 | 0/30 (0 %) | 0/30 (0 %) | 3,300 / 3,209 s | 102,40 s |
+| Ministral 3 3B Instruct | P1 | 12/30 (40,0 %) | 30/30 (100 %) | 0,769 / 0,749 s | 26,18 s |
+| Ministral 3 3B Instruct | P2 | 12/30 (40,0 %) | 30/30 (100 %) | 0,795 / 0,786 s | 27,03 s |
+| Ministral 3 3B Instruct | P3 | 9/30 (30,0 %) | 22/30 (73,3 %) | 1,425 / 0,876 s | 46,32 s |
+
+Les blocs mesurés comptent zéro erreur technique. Le bloc P2 de Bonsai s’est arrêté pendant sa douzième requête, qui est enregistrée comme interrompue. Sur les 11 premières questions P2, tous les modèles ont rendu 11 réponses conformes. Bonsai en a réussi six, Qwen et Ministral trois chacun. La durée extrapolée depuis zéro est de 7 h 52 min 02 s pour Qwen et 4 h 52 min 29 s pour Ministral selon la même méthode. L’estimation historique de Bonsai est d’environ 67 h 05 d’inférence, calculée à partir de la latence moyenne de ses 41 réponses.
+
+## Choix définitif du deuxième modèle
+
+Le 25 novembre 2026, l’utilisatrice a validé le pilote et retenu **Ministral-3-3B-Instruct-2512** pour le deuxième benchmark complet.
+
+- **Bonsai 27B** dépassait les contraintes de durée et de mémoire de la machine. L’estimation d’inférence était d’environ 67 h 05, et le pilote s’est arrêté après 41 réponses.
+- **Qwen3 4B Instruct** présentait une durée active extrapolée de 7 h 52 min et une conformité P3 de 0/30.
+- **Ministral 3 3B Instruct** offre le meilleur compromis entre durée, conformité et faisabilité matérielle parmi les pilotes. Il a terminé les 90 inférences sur la machine, avec une conformité de 100 % sur P1 et P2, de 73,3 % sur P3 et une durée active extrapolée de 4 h 52 min.
+
+Les mesures Bonsai et Qwen restent dans les répertoires locaux de leurs pilotes pour la traçabilité. La comparaison Gold utilisera les benchmarks complets validés de Gemma et Ministral.
+
 ## Prochain jalon
 
-Le benchmark complet Qwen est en attente de décision. Le prochain jalon est le test de faisabilité de Ministral 3 3B avant le choix définitif du deuxième modèle. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à traiter.
+L’utilisatrice a autorisé le benchmark complet de Ministral avec reprise des 90 mesures du pilote. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à traiter.
