@@ -2,11 +2,12 @@ from argparse import ArgumentParser
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import combinations
 import json
 import os
 from pathlib import Path
 from statistics import mean, median
-from subprocess import TimeoutExpired, run
+from subprocess import SubprocessError, TimeoutExpired, check_output, run
 from tempfile import TemporaryDirectory
 from time import perf_counter
 from urllib.parse import urlsplit
@@ -29,9 +30,12 @@ MANIFESTE = DOSSIER_PILOTE / "pilot_question_ids.parquet"
 METADONNEES = DOSSIER_PILOTE / "manifest_metadata.json"
 JOURNAL = DOSSIER_PILOTE / "pilot.duckdb"
 SCHEMA_MANIFESTE = (("pilot_order", "BIGINT"), ("question_id", "VARCHAR"), ("seed", "BIGINT"))
+PROMPTS_HISTORIQUES = ("P1_choices", "P2_expert")
+PROMPT_P3 = "P3_expert_advanced"
 FICHIERS_RESULTATS = {
     "P1_choices": SILVER.parent / "gemma_p1_choices.parquet",
     "P2_expert": SILVER.parent / "gemma_p2_expert.parquet",
+    PROMPT_P3: SILVER.parent / "gemma_p3_expert_advanced.parquet",
 }
 
 
@@ -43,6 +47,7 @@ class StockageInference:
 
 
 STOCKAGE_PILOTE = StockageInference(JOURNAL, BRONZE.parent, SILVER.parent)
+STOCKAGE_P3 = StockageInference(DOSSIER_PILOTE / "pilot_p3.duckdb", BRONZE.parent, SILVER.parent)
 SCHEMA_BRONZE = (
     ("question_id", "VARCHAR"), ("model_id", "VARCHAR"), ("prompt_id", "VARCHAR"),
     ("inference_id", "UUID"), ("pilot_order", "INTEGER"), ("segment_id", "UUID"),
@@ -56,6 +61,17 @@ CONSIGNES_FORMAT = {
 }
 REPONSES_ADMISES = {"multiple": tuple("ABCD"), "boolean": ("True", "False")}
 ROLE_EXPERT = "You are a general knowledge expert."
+CONSIGNES_P3 = {
+    "multiple": (
+        "Carefully analyze the question and evaluate each answer choice.\n"
+        "Use your factual knowledge to eliminate incorrect options.\n"
+        "Check your answer before responding."
+    ),
+    "boolean": (
+        "Carefully evaluate the statement using your factual knowledge.\n"
+        "Check its accuracy before responding."
+    ),
+}
 PARAMETRES = {
     "temperature": 0, "top_k": 1, "top_p": 1, "min_p": 0, "repeat_penalty": 1,
     "max_output_tokens": 16, "context_length": 4096, "reasoning": "off",
@@ -144,6 +160,8 @@ def construire_prompt(question, prompt_id):
     if type_question == "multiple":
         choix = [f"{lettre}. {texte}" for lettre, texte in zip("ABCD", choix, strict=True)]
     texte = "\n\n".join((f"{CONSIGNE} {CONSIGNES_FORMAT[type_question]}", question["question"], "\n".join(choix)))
+    if prompt_id == PROMPT_P3:
+        return f"{ROLE_EXPERT}\n{CONSIGNES_P3[type_question]}\n{texte}"
     return f"{ROLE_EXPERT}\n{texte}" if prompt_id == "P2_expert" else texte
 
 
@@ -387,7 +405,7 @@ def executer_bloc(db, client, questions, prompt_id, modele, instance_id, configu
     print(f"{prompt_id} · bloc terminé en {perf_counter() - debut:.2f} s.", flush=True)
 
 
-def configuration_execution(args, meta):
+def configuration_execution(args, meta, prompts=PROMPTS_HISTORIQUES):
     client = LMStudio(args.url, args.curl)
     modele, instance = client.choisir_modele(args.model_id)
     configurations_prompts = {
@@ -395,7 +413,7 @@ def configuration_execution(args, meta):
                                                "answer_choices": [f"{{choix_{i}}}" for i in range(len(reponses))]},
                                               prompt)
                              for type_question, reponses in REPONSES_ADMISES.items()))
-        for prompt in FICHIERS_RESULTATS
+        for prompt in prompts
     }
     configuration = json_compact({
         "dataset_sha256": meta["dataset_sha256"], "manifest_sha256": meta["manifest_sha256"],
@@ -407,14 +425,20 @@ def configuration_execution(args, meta):
     return client, modele, instance, configuration
 
 
-def executer(args, questions, meta, stockage=STOCKAGE_PILOTE):
+def executer(args, questions, meta, stockage=STOCKAGE_PILOTE, prompts=PROMPTS_HISTORIQUES, reference=None):
     if not stockage.journal.exists() and any(chemin_bronze(prompt, stockage).exists()
-            or (stockage.silver / fichier.name).exists() for prompt, fichier in FICHIERS_RESULTATS.items()):
+            or (stockage.silver / FICHIERS_RESULTATS[prompt].name).exists() for prompt in prompts):
         raise ValueError("Récupérer le journal de reprise d’origine avant de reprendre des résultats existants.")
-    client, modele, instance, configuration = configuration_execution(args, meta)
+    client, modele, instance, configuration = configuration_execution(args, meta, prompts)
+    if reference is not None:
+        actuelle = json.loads(configuration)
+        differences = sorted(cle for cle in reference.keys() | actuelle.keys()
+                             if cle != "prompt_sha256" and reference.get(cle) != actuelle.get(cle))
+        if differences:
+            raise ValueError(f"La configuration diffère du pilote pour {', '.join(differences)}.")
     with duckdb.connect(str(stockage.journal)) as db:
         initialiser_journal(db, configuration)
-        for prompt in FICHIERS_RESULTATS:
+        for prompt in prompts:
             executer_bloc(db, client, questions, prompt, modele["key"], instance["id"], configuration, stockage)
 
 
@@ -426,20 +450,29 @@ def configuration_journal(db, meta):
     return config
 
 
+def executer_p3(args, questions, meta):
+    with duckdb.connect(str(JOURNAL), read_only=True) as db:
+        reference = configuration_journal(db, meta)
+    runtimes = check_output([args.lms, "runtime", "ls"], encoding="utf-8", timeout=15)
+    selectionnes = {ligne.split()[0] for ligne in runtimes.splitlines() if "✓" in ligne}
+    if args.runtime != reference["runtime"] or args.runtime not in selectionnes:
+        raise ValueError(f"Le moteur {reference['runtime']} doit être sélectionné dans LM Studio.")
+    executer(args, questions, meta, STOCKAGE_P3, (PROMPT_P3,), reference)
+
+
 def reconstruire_bronze(meta):
     with duckdb.connect(str(JOURNAL), read_only=True) as db:
         modele = configuration_journal(db, meta)["model"]["key"]
-        for prompt in FICHIERS_RESULTATS:
+        for prompt in PROMPTS_HISTORIQUES:
             exporter_bronze(db, prompt, modele)
 
 
-def bilan(questions, meta, stockage=STOCKAGE_PILOTE):
+def mesures_bilan(questions, meta, stockage, prompts):
     par_id = {question["question_id"]: question for question in questions}
-    rapport = {"population": meta["population"], "sample_size": len(questions), "prompts": {}}
+    statistiques_prompts, recus = {}, {}
     with duckdb.connect(str(stockage.journal), read_only=True) as db:
         configuration_journal(db, meta)
-        recus = {}
-        for prompt in FICHIERS_RESULTATS:
+        for prompt in prompts:
             lignes = db.execute("""
                 SELECT question_id, raw_response, response_time, status, error_type
                 FROM tentatives WHERE prompt_id = ? ORDER BY pilot_order
@@ -456,6 +489,7 @@ def bilan(questions, meta, stockage=STOCKAGE_PILOTE):
             duree, = db.execute("SELECT COALESCE(SUM(active_seconds), 0) FROM segments WHERE prompt_id = ?",
                                 [prompt]).fetchone()
             complet = tentatives == len(questions)
+            restantes = meta["population"] - (tentatives if prompt == PROMPT_P3 else len(mesures))
             statistiques = {
                 "tentatives_mesurees": tentatives, "recues": len(mesures), "correctes": correctes,
                 "conformes": conformes, "exactitude": correctes / len(mesures) if mesures else None,
@@ -465,7 +499,7 @@ def bilan(questions, meta, stockage=STOCKAGE_PILOTE):
                 "latence_moyenne_s": mean(latences) if latences else None,
                 "latence_mediane_s": median(latences) if latences else None, "duree_active_s": duree,
                 "projection_complete_s": duree * meta["population"] / len(questions) if complet else None,
-                "projection_restante_s": duree * (meta["population"] - len(mesures)) / len(questions) if complet else None,
+                "projection_restante_s": duree * restantes / len(questions) if complet else None,
             }
             groupes = {}
             for dimension in COLONNES_STRATES:
@@ -474,16 +508,33 @@ def bilan(questions, meta, stockage=STOCKAGE_PILOTE):
                     groupe = groupes[dimension].setdefault(par_id[qid][dimension], Counter())
                     groupe.update(recues=1, correctes=int(correct), conformes=int(conforme))
             statistiques["groupes"] = groupes
-            rapport["prompts"][prompt] = statistiques
-        p1, p2 = recus.values()
-        partagees = p1.keys() & p2.keys()
-        rapport["apparie"] = {
-            "questions_communes": len(partagees),
-            "p1_correctes": sum(p1[qid][0] for qid in partagees),
-            "p2_correctes": sum(p2[qid][0] for qid in partagees),
-            "p1_seul_correct": sum(p1[qid][0] and not p2[qid][0] for qid in partagees),
-            "p2_seul_correct": sum(p2[qid][0] and not p1[qid][0] for qid in partagees),
-        }
+            statistiques_prompts[prompt] = statistiques
+    return statistiques_prompts, recus
+
+
+def comparer_reponses(p1, p2):
+    partagees = p1.keys() & p2.keys()
+    return {
+        "questions_communes": len(partagees),
+        "p1_correctes": sum(p1[qid][0] for qid in partagees),
+        "p2_correctes": sum(p2[qid][0] for qid in partagees),
+        "p1_seul_correct": sum(p1[qid][0] and not p2[qid][0] for qid in partagees),
+        "p2_seul_correct": sum(p2[qid][0] and not p1[qid][0] for qid in partagees),
+    }
+
+
+def bilan(questions, meta, stockage=STOCKAGE_PILOTE, *, inclure_p3=False):
+    statistiques, recus = mesures_bilan(questions, meta, stockage, PROMPTS_HISTORIQUES)
+    rapport = {"population": meta["population"], "sample_size": len(questions), "prompts": statistiques}
+    rapport["apparie"] = comparer_reponses(*recus.values())
+    if inclure_p3:
+        statistiques_p3, recus_p3 = mesures_bilan(questions, meta, STOCKAGE_P3, (PROMPT_P3,))
+        statistiques.update(statistiques_p3)
+        recus.update(recus_p3)
+        rapport["paires"] = [
+            {"prompts": [premier, second], **comparer_reponses(recus[premier], recus[second])}
+            for premier, second in combinations(recus, 2)
+        ]
     return rapport
 
 
@@ -493,7 +544,11 @@ def main():
     sous_commandes.add_parser("manifeste", help="Créer ou contrôler le manifeste du Silver définitif")
     lancement = sous_commandes.add_parser("executer", help="Exécuter ou reprendre les deux blocs")
     ajouter_options_lm_studio(lancement)
+    lancement_p3 = sous_commandes.add_parser("executer-p3", help="Exécuter ou reprendre uniquement P3 sur le pilote")
+    ajouter_options_lm_studio(lancement_p3)
+    lancement_p3.add_argument("--lms", default="lms")
     sous_commandes.add_parser("bilan", help="Afficher les métriques et les projections du journal")
+    sous_commandes.add_parser("bilan-p3", help="Comparer les trois prompts à partir des journaux du pilote")
     sous_commandes.add_parser("reconstruire-bronze", help="Exporter les mesures brutes du journal hors ligne")
     sous_commandes.add_parser("structurer", help="Reproduire les Parquet Silver à partir du Bronze hors ligne")
     args = parser.parse_args()
@@ -508,13 +563,16 @@ def main():
             reconstruire_bronze(meta)
             return
         if args.action == "structurer":
-            for prompt in FICHIERS_RESULTATS:
+            for prompt in PROMPTS_HISTORIQUES:
                 structurer_silver(questions, prompt)
             return
         if args.action == "executer":
             executer(args, questions, meta)
-        print(json.dumps(bilan(questions, meta), indent=2, ensure_ascii=False))
-    except (ErreurAPI, OSError, RuntimeError, ValueError) as exc:
+        if args.action == "executer-p3":
+            executer_p3(args, questions, meta)
+        rapport = bilan(questions, meta, inclure_p3=args.action in {"executer-p3", "bilan-p3"})
+        print(json.dumps(rapport, indent=2, ensure_ascii=False))
+    except (ErreurAPI, OSError, RuntimeError, SubprocessError, ValueError) as exc:
         parser.exit(1, f"Erreur : {exc}\n")
 
 

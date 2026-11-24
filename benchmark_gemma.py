@@ -68,7 +68,7 @@ def preparer():
         journal = dossier / STOCKAGE.journal.name
         with duckdb.connect(str(pilote.JOURNAL), read_only=True) as db:
             config = pilote.configuration_journal(db, meta_pilote)
-            for prompt in pilote.FICHIERS_RESULTATS:
+            for prompt in pilote.PROMPTS_HISTORIQUES:
                 lignes = db.execute("""
                     SELECT pilot_order, question_id, status FROM tentatives WHERE prompt_id = ? ORDER BY pilot_order
                 """, [prompt]).fetchall()

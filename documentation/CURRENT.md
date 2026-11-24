@@ -1,6 +1,6 @@
 # État d’avancement
 
-Mis à jour le 24 novembre 2026. Le benchmark complet de Gemma 4 E2B est validé et le lot 4 est clos. Il couvre les 5 290 questions du Silver révisé par prompt et inclut les 1 060 inférences du pilote.
+Mis à jour le 24 novembre 2026. Le lot 4 est clos pour `P1_choices` et `P2_expert`, avec 5 290 questions mesurées par prompt, dont les 1 060 inférences du pilote. Le pilote de `P3_expert_advanced` est terminé sur les mêmes 530 questions. Le traitement des 4 760 questions restantes attend la validation de l’utilisatrice.
 
 ## Travail réalisé
 
@@ -193,6 +193,27 @@ Le journal du lot 4 a repris les 1 060 tentatives du pilote et ajouté 4 760
 
 Sur les 5 290 paires, 89 questions sont correctes uniquement avec `P1_choices` et 78 uniquement avec `P2_expert`. L’écart observé est de 0,21 point en faveur de `P1_choices`. La durée active cumulée est de 1 h 41 min 24 s, dont 12 min 51 s mesurées au pilote.
 
+L’audit en lecture seule du script et des journaux LM Studio confirme l’indépendance conversationnelle des 10 580 requêtes mesurées. Les transitions entre prompts n’incluent aucune commande de déchargement ni de réinitialisation du cache. [Garantie méthodologique](ARCHITECTURE.md#indépendance-conversationnelle)
+
+## Pilote de P3_expert_advanced
+
+Le bloc P3 a utilisé Gemma 4 E2B Q4_K_M, LM Studio `0.4.28+2` et le moteur Vulkan `2.80.1`. Il a repris les 530 identifiants dans l’ordre du manifeste, avec les réglages d’inférence et le scoring strict du pilote historique. L’audit des requêtes LM Studio confirme une requête indépendante par question et un échauffement synthétique. Les empreintes des Parquet et des journaux historiques P1 et P2 concordent avant et après l’exécution. [Protocole](ARCHITECTURE.md#benchmark) · [Bronze P3](../data/bronze/gemma_p3_expert_advanced.parquet) · [Silver P3](../data/silver/gemma_p3_expert_advanced.parquet)
+
+| Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
+| --- | ---: | ---: | ---: |
+| Réponses correctes sur 530 | 301 (56,79 %) | 304 (57,36 %) | 291 (54,91 %) |
+| QCM corrects sur 454 | 252 | 257 | 246 |
+| Vrai/faux corrects sur 76 | 49 | 47 | 45 |
+| Réponses conformes sur 530 | 530 (100 %) | 530 (100 %) | 524 (98,87 %) |
+| Erreurs techniques | 0 | 0 | 0 |
+| Latence moyenne | 0,594 s | 0,618 s | 0,547 s |
+| Latence médiane | 0,559 s | 0,584 s | 0,508 s |
+| Durée active | 378,81 s | 392,25 s | 342,41 s |
+
+Sur les mêmes 530 questions, P3 a obtenu 13 bonnes réponses de moins que P2, soit 2,45 points d’exactitude de moins. P2 est seul correct sur 34 questions et P3 sur 21. Les six réponses P3 hors format concernent des QCM, dont un avec une réponse brute vide. Les six comptent comme incorrectes. La commande `pilote_gemma.py bilan-p3` reproduit ces métriques depuis les journaux du pilote.
+
+La projection pour les 4 760 questions restantes est de **51 min 15 s**, sur la base de `342,41 × 4 760 / 530` en conditions comparables. Elle réutilise les 530 mesures existantes et exclut l’échauffement.
+
 ## Prochain jalon
 
-Attendre la validation de l’utilisatrice avant le choix d’un deuxième modèle. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à réaliser.
+Attendre la validation de l’utilisatrice avant de traiter les 4 760 questions restantes avec P3 ou de choisir un deuxième modèle. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à réaliser.

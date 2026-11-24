@@ -52,6 +52,8 @@ Le contrôle des doublons de libellé calcule une clé de comparaison en NFC ave
 
 `pilote_gemma.py executer` journalise chaque tentative dans le DuckDB local avant et après l’appel. Toutes les 25 tentatives et à la fin d’un bloc, chaque Parquet est remplacé atomiquement, d’abord dans Bronze pour la combinaison modèle et prompt, puis dans Silver. Les deux couches portent les fichiers `gemma_p1_choices.parquet` et `gemma_p2_expert.parquet`. `reconstruire-bronze` reproduit les mesures depuis le journal. `structurer` reproduit les résultats à partir des Parquet Bronze, du manifeste et des questions Silver. Ces deux opérations fonctionnent hors ligne.
 
+`pilote_gemma.py executer-p3` utilise le même chemin d’inférence, de journalisation, d’export et de scoring sur le manifeste de 530 questions. Le bloc écrit dans `data/silver/pilot_lot2/pilot_p3.duckdb` et produit `gemma_p3_expert_advanced.parquet` à la racine de chaque couche. Avant le bloc, le script vérifie le moteur LM Studio sélectionné et compare la configuration effective à celle du pilote historique, avec une empreinte propre au gabarit P3. `pilote_gemma.py bilan-p3` compare les trois résultats en ouvrant les deux journaux en lecture seule.
+
 | Couche | Champs | Information portée |
 | --- | --- | --- |
 | Bronze et Silver | `question_id`, `model_id`, `prompt_id`, `inference_id` | Identifiants de la question, du modèle, du prompt et de la tentative |
@@ -74,7 +76,7 @@ dbt construit les indicateurs dans DuckDB. Le niveau `staging` lit, standardise 
 
 ### Benchmark
 
-Le pilote utilise Gemma 4 E2B via l’API `POST /api/v1/chat` de LM Studio. Chaque prompt est exécuté une fois par question, dans l’ordre `pilot_order`, avec des requêtes indépendantes. Deux blocs séquentiels, `P1_choices` puis `P2_expert`, commencent chacun après le même échauffement sur une question synthétique. L’ordre fixe peut influencer les latences si la température ou la charge du matériel évolue.
+Le pilote utilise Gemma 4 E2B via l’API `POST /api/v1/chat` de LM Studio. Chaque prompt est exécuté une fois par question, dans l’ordre `pilot_order`, avec des requêtes indépendantes. Les blocs historiques `P1_choices` puis `P2_expert` et le bloc ajouté `P3_expert_advanced` commencent chacun après le même échauffement sur une question synthétique. L’ordre des blocs et le moment de leur exécution peuvent influencer les latences si la température ou la charge du matériel évolue.
 
 Les réglages communs sont `temperature=0`, `top_k=1`, `top_p=1`, `min_p=0`, `repeat_penalty=1`, `max_output_tokens=16`, `context_length=4096`, `reasoning="off"`, `stream=false`, `store=false`. Le client applique un délai maximal de 60 secondes à chaque appel. [API LM Studio](https://lmstudio.ai/docs/developer/rest/chat)
 
@@ -90,7 +92,30 @@ Answer the following general knowledge question. Reply with only one uppercase l
 
 Pour un vrai/faux, la consigne de réponse est `Reply with only True or False.` et les choix sont affichés dans l’ordre de `answer_choices` sans lettres. `P2_expert` ajoute uniquement `You are a general knowledge expert.` sur une ligne avant le texte de `P1_choices`.
 
+`P3_expert_advanced` reprend `P2_expert` et insère une consigne par ligne immédiatement après `You are a general knowledge expert.`. Pour un QCM, les lignes sont les suivantes.
+
+```text
+Carefully analyze the question and evaluate each answer choice.
+Use your factual knowledge to eliminate incorrect options.
+Check your answer before responding.
+```
+
+Pour un vrai/faux, les lignes sont les suivantes.
+
+```text
+Carefully evaluate the statement using your factual knowledge.
+Check its accuracy before responding.
+```
+
 Le prompt contient uniquement la consigne, `question` et les éléments de `answer_choices`. Le type sert localement à choisir le gabarit. `question_id` identifie la mesure locale. `correct_answer`, `incorrect_answers` et `expected_answer` restent dans les données de référence et l’évaluation compare localement la réponse du modèle à `expected_answer`.
+
+#### Indépendance conversationnelle
+
+Les journaux LM Studio confirment que les 10 580 requêtes mesurées et les quatre échauffements ont été envoyés avec `"store": false`, sans `previous_response_id` ni historique de messages. Chaque appel transmet un seul texte avec la consigne, la question et ses choix. La bonne réponse figure parmi les choix sans indication de sa validité. La référence `expected_answer` sert uniquement au scoring local. Le script confirme la construction du texte complet et le contrôle côté serveur compare les extraits d’`input` lorsque les journaux abrègent ce champ. [Script d’inférence](../pilote_gemma.py) · [API de conversation LM Studio](https://lmstudio.ai/docs/developer/rest/chat)
+
+Entre `P1_choices` et `P2_expert`, le script poursuit sur l’instance `gemma-pilote-lot3` et lance l’échauffement synthétique du second bloc. Il ne commande aucun déchargement ni aucune réinitialisation du cache. Les journaux consultés ne montrent pas d’événement de ce type entre les blocs. L’audit porte sur le contexte de conversation et les opérations observables. Il ne mesure pas l’état du cache interne du moteur.
+
+Pour P3, les 530 requêtes mesurées et l’échauffement utilisent la même instance. Le journal serveur confirme `store=false` et un historique d’un seul message pour chaque appel. Les extraits d’`input` correspondent aux prompts attendus dans l’ordre du manifeste.
 
 | Mesure | Calcul par prompt |
 | --- | --- |
