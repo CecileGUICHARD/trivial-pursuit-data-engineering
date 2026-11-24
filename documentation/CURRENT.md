@@ -234,6 +234,29 @@ P3 obtient 110 bonnes réponses de moins que P1 (2,08 points) et 99 de moins que
 
 La relecture a confirmé les mêmes 5 290 identifiants ordonnés dans chaque Parquet et 15 870 identifiants d’inférence distincts. Les 530 premières lignes des exports P3 concordent champ par champ avec les fichiers du pilote. Le scoring strict recalculé concorde avec Silver. Les empreintes des fichiers historiques de P1, P2 et du pilote P3 concordent avant et après le complément. Le journal serveur confirme l’indépendance des 5 290 requêtes P3. La commande `benchmark_gemma.py bilan --p3` reproduit le comparatif en lecture seule. [Protocole](ARCHITECTURE.md#indépendance-conversationnelle)
 
+## Pilote Bonsai 27B arrêté et modèle abandonné
+
+L’utilisatrice a arrêté le pilote après **41 inférences terminées sur 90**. Gemma avait été déchargé et Bonsai 27B Q1_0 a chargé en 37,02 s. L’exécution de `P1_choices` est complète. L’arrêt a interrompu la douzième requête de `P2_expert`, conservée avec le statut `interrupted`. Le bloc `P3_expert_advanced` et le benchmark complet sont restés au stade de la préparation. Après l’arrêt, l’API LM Studio a confirmé que Bonsai était déchargé et que la liste des instances chargées était vide. L’utilisatrice a validé l’abandon définitif de Bonsai pour des raisons de faisabilité matérielle. [Configuration](ARCHITECTURE.md#pilote-bonsai-27b)
+
+| Mesure | `P1_choices` | `P2_expert` |
+| --- | ---: | ---: |
+| Réponses reçues | 30 | 11 |
+| Réponses conformes | 30 | 11 |
+| Réponses correctes | 17 | 6 |
+| Erreurs techniques | 0 | 0 |
+| Requêtes interrompues à l’arrêt | 0 | 1 |
+| Latence moyenne | 14,81 s | 16,33 s |
+| Latence médiane | 16,14 s | 15,88 s |
+| Durée active | 449,76 s | 193,28 s |
+
+La latence moyenne sur les 41 réponses est de **15,22 s** et la durée active cumulée des deux segments est de **10 min 43 s**. En appliquant cette latence moyenne aux 15 870 inférences du benchmark complet, le temps d’inférence est estimé à **67 h 05** depuis zéro, ou **66 h 55** pour les 15 829 inférences restantes après reprise des 41 mesures. Cette extrapolation exclut les échauffements et la persistance. Elle suppose des latences comparables à celles des réponses observées, y compris pour P3, dont la durée reste inconnue.
+
+Le modèle est abandonné pour ce benchmark sur la machine actuelle en raison de la pression mémoire et du temps de traitement extrapolé. Sur 44 relevés Windows du processus `llama-server`, le maximum observé est de 5,79 Gio de mémoire GPU partagée sur l’Intel UHD et de 14,30 Gio de mémoire privée engagée par le processus. Ces compteurs se lisent séparément. La mémoire physique totale signalée par Windows est de 15,75 Gio. Un relevé pendant le pilote indiquait 444 Mio de mémoire physique disponible. [Relevés mémoire](../data/silver/pilote_bonsai/memoire.jsonl)
+
+Les mesures et la tentative interrompue sont conservées dans le journal DuckDB et les Parquet Bonsai. L’audit du journal LM Studio retrouve 42 appels du pilote, deux échauffements et une requête synthétique de contrôle. Chacun transmet un seul message avec `store=false`. La relecture des exports vérifie l’ordre du manifeste, les champs communs entre Bronze et Silver et le scoring strict. Les empreintes SHA-256 des 41 fichiers de données Bronze et Silver présents avant le pilote concordent, y compris les fichiers Gemma. [Mesures Bronze](../data/bronze/pilote_bonsai/) · [Résultats et journal Silver](../data/silver/pilote_bonsai/)
+
+Les résultats partiels Bonsai sont conservés localement pour la traçabilité. La future comparaison Gold des benchmarks complets exclura l’ensemble de ces mesures. [Périmètre Gold](ARCHITECTURE.md#gold-et-restitution)
+
 ## Prochain jalon
 
-Le choix d’un deuxième modèle, les modèles dbt, les indicateurs Gold et l’application Streamlit restent à traiter.
+Le choix d’un autre modèle local reste ouvert. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à traiter.

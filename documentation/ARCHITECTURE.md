@@ -76,6 +76,8 @@ Le contrôle de clôture a retrouvé les 5 290 identifiants du corpus une fois
 
 dbt construit les indicateurs dans DuckDB. Le niveau `staging` lit, standardise et type les sources. Le niveau `intermediate` porte les jointures et les calculs intermédiaires. Le niveau `marts` expose les tables analytiques et les indicateurs destinés à Streamlit. L’application sera développée après la construction des données Gold.
 
+Pour la comparaison Gold, `staging` référencera uniquement les exports Silver des benchmarks complets validés, à commencer par les trois Parquet Gemma du lot 4. Les mesures de Bonsai 27B sont des données partielles conservées pour la traçabilité sous `data/bronze/pilote_bonsai/` et `data/silver/pilote_bonsai/`. Ces répertoires sont exclus des sources de la comparaison Gold et leurs mesures ne contribuent à aucun de ses indicateurs.
+
 ### Benchmark
 
 Le pilote utilise Gemma 4 E2B via l’API `POST /api/v1/chat` de LM Studio. Chaque prompt est exécuté une fois par question, dans l’ordre `pilot_order`, avec des requêtes indépendantes. Les blocs historiques `P1_choices` puis `P2_expert` et le bloc ajouté `P3_expert_advanced` commencent chacun après le même échauffement sur une question synthétique. L’ordre des blocs et le moment de leur exécution peuvent influencer les latences si la température ou la charge du matériel évolue.
@@ -129,7 +131,27 @@ Les 5 290 requêtes P3 et les deux échauffements utilisent la même instance.
 
 La projection historique du pilote multiplie sa durée active par `5 290 / 530`. L’estimation du temps restant utilisait le nombre de questions encore à mesurer, divisé par 530. Le bilan définitif cumule les durées réellement mesurées lors du pilote et du lot 4. Les comparaisons par catégorie, difficulté et type indiquent leurs effectifs. Un choix uniforme au hasard donne 25 % de bonnes réponses sur un QCM à quatre choix et 50 % sur un vrai/faux.
 
+### Pilote Bonsai 27B
+
+Le pilote s’est arrêté à la demande de l’utilisatrice après 41 réponses. Bonsai a été déchargé et l’utilisatrice a validé la clôture définitive du modèle pour ce benchmark. [Mesures partielles et motif d’arrêt](CURRENT.md#pilote-bonsai-27b-arrêté-et-modèle-abandonné)
+
+L’instance `bonsai-pilote` charge `prism-ml/bonsai-27b`, variante `prism-ml/bonsai-27b@q1_0`. L’API LM Studio indique une architecture `qwen35`, 27 milliards de paramètres et un contexte maximal de 262 144 tokens. PrismML indique une base Qwen3.6-27B à attention hybride. Le contexte utilisé par le pilote est de 4 096 tokens. LM Studio `0.4.28+2` utilise le moteur `llama.cpp-win-x86_64-vulkan-avx2@2.80.1` sous Windows. Le modèle a chargé en 37,02 s après le déchargement de Gemma. [Fiche PrismML](https://huggingface.co/prism-ml/Bonsai-27B-gguf) · [Conversion LM Studio Community](https://huggingface.co/lmstudio-community/Bonsai-27B-GGUF)
+
+| Fichier installé | Taille en octets | SHA-256 mesuré |
+| --- | ---: | --- |
+| `Bonsai-27B-Q1_0.gguf` | 3 803 452 576 | `71d6871836886267f39f1ac69b1b1dd8a783970708d7a189960112ed02978901` |
+| `mmproj-Bonsai-27B-BF16.gguf` | 931 145 888 | `c4c09d300638f6d2759e1ffe94d97cf08be94b8c9dad6920509be1aab11fd8cb` |
+
+L’empreinte du modèle texte concorde avec celle publiée par LM Studio Community. L’API rapporte 4 734 614 604 octets pour l’ensemble. Le serveur a chargé le projecteur multimodal BF16 et les requêtes du pilote contiennent uniquement du texte. [Empreinte publiée du GGUF](https://huggingface.co/lmstudio-community/Bonsai-27B-GGUF/blob/main/Bonsai-27B-Q1_0.gguf)
+
+LM Studio a choisi automatiquement la répartition CPU/GPU sur l’Intel Core i5-1235U et l’Intel UHD Graphics. L’instance rapporte quatre créneaux, un lot logique de 2 048 tokens, un lot physique de 512 tokens, 32 points de reprise de contexte, Flash Attention activée et un cache KV placé sur le GPU. Le journal moteur signale un traitement Flash Attention sur CPU pour une couche placée sur Vulkan. Le décodage spéculatif est désactivé. Le pilote envoie les requêtes une par une.
+
+`pilote_bonsai.py manifeste` reprend les 30 premiers rangs du [manifeste Gemma validé](../data/silver/pilot_lot2/pilot_question_ids.parquet), dans leur ordre d’origine. L’échantillon comprend 27 QCM et 3 vrai/faux, avec 10 questions faciles, 13 intermédiaires et 7 difficiles sur 13 catégories. Le [manifeste Bonsai](../data/silver/pilote_bonsai/pilot_question_ids.parquet) porte le SHA-256 `79d2d9c59f0aa56b16af8e1b6a9b2583dbc510f2cb0fe9e98cf05a8055e3a560`. Les trois blocs utilisent ces mêmes identifiants, les choix ordonnés du Silver et les fonctions de construction des prompts et de scoring du pilote Gemma.
+
+`pilote_bonsai.py executer` vérifie le moteur sélectionné et la configuration de l’instance, puis réutilise le client HTTP, le journal DuckDB, les exports Bronze et la structuration Silver. Chaque appel mesuré utilise un seul texte et `store=false`. Les réglages d’inférence, le délai HTTP de 60 s et l’échauffement synthétique avant chaque bloc suivent le protocole Gemma. Les artefacts du pilote sont locaux, sous [Bronze](../data/bronze/pilote_bonsai/) et [Silver](../data/silver/pilote_bonsai/). Chaque couche contient un Parquet `bonsai_*.parquet` par prompt exécuté. Le journal `pilot.duckdb` de Silver conserve les réglages et les mesures de chaque tentative. [Exécution du pilote](../pilote_bonsai.py)
+
+`pilote_bonsai.py bilan` lit le journal et calcule les projections de durée active pour les blocs complets. Il reproduit aussi l’extrapolation globale du pilote arrêté en multipliant la latence moyenne des 41 réponses reçues par les 15 870 inférences prévues sur les trois prompts. [Calcul et limites](CURRENT.md#pilote-bonsai-27b-arrêté-et-modèle-abandonné)
+
 ## Choix à arbitrer
 
 - Modèle relationnel détaillé et dictionnaire des données Gold.
-- Autorisation de l’utilisatrice avant le choix d’un deuxième LLM.

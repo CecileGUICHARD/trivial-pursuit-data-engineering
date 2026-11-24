@@ -44,6 +44,10 @@ class StockageInference:
     journal: Path
     bronze: Path
     silver: Path
+    prefixe: str = "gemma"
+
+    def nom_fichier(self, prompt_id):
+        return f"{self.prefixe}_{prompt_id.lower()}.parquet"
 
 
 STOCKAGE_PILOTE = StockageInference(JOURNAL, BRONZE.parent, SILVER.parent)
@@ -295,7 +299,7 @@ def initialiser_journal(db, configuration):
 
 
 def chemin_bronze(prompt_id, stockage=STOCKAGE_PILOTE):
-    return stockage.bronze / FICHIERS_RESULTATS[prompt_id].name
+    return stockage.bronze / stockage.nom_fichier(prompt_id)
 
 
 def exporter_bronze(db, prompt_id, modele, stockage=STOCKAGE_PILOTE):
@@ -314,7 +318,7 @@ def exporter_bronze(db, prompt_id, modele, stockage=STOCKAGE_PILOTE):
 
 def structurer_silver(questions, prompt_id, stockage=STOCKAGE_PILOTE):
     bronze = chemin_bronze(prompt_id, stockage)
-    destination = stockage.silver / FICHIERS_RESULTATS[prompt_id].name
+    destination = stockage.silver / stockage.nom_fichier(prompt_id)
     with duckdb.connect(":memory:") as db, TemporaryDirectory(dir=destination.parent) as temporaire:
         empreinte_bronze = empreinte_fichier(bronze)
         db.execute("CREATE TEMP TABLE tentatives_brutes AS SELECT * FROM read_parquet(?)", [str(bronze)])
@@ -405,8 +409,9 @@ def executer_bloc(db, client, questions, prompt_id, modele, instance_id, configu
     print(f"{prompt_id} · bloc terminé en {perf_counter() - debut:.2f} s.", flush=True)
 
 
-def configuration_execution(args, meta, prompts=PROMPTS_HISTORIQUES):
-    client = LMStudio(args.url, args.curl)
+def configuration_execution(args, meta, prompts=PROMPTS_HISTORIQUES, *, client=None):
+    if client is None:
+        client = LMStudio(args.url, args.curl)
     modele, instance = client.choisir_modele(args.model_id)
     configurations_prompts = {
         prompt: empreinte(*(construire_prompt({"type": type_question, "question": "{question}",
@@ -425,11 +430,11 @@ def configuration_execution(args, meta, prompts=PROMPTS_HISTORIQUES):
     return client, modele, instance, configuration
 
 
-def executer(args, questions, meta, stockage=STOCKAGE_PILOTE, prompts=PROMPTS_HISTORIQUES, reference=None):
+def executer(args, questions, meta, stockage=STOCKAGE_PILOTE, prompts=PROMPTS_HISTORIQUES, reference=None, *, client=None):
     if not stockage.journal.exists() and any(chemin_bronze(prompt, stockage).exists()
-            or (stockage.silver / FICHIERS_RESULTATS[prompt].name).exists() for prompt in prompts):
+            or (stockage.silver / stockage.nom_fichier(prompt)).exists() for prompt in prompts):
         raise ValueError("Récupérer le journal de reprise d’origine avant de reprendre des résultats existants.")
-    client, modele, instance, configuration = configuration_execution(args, meta, prompts)
+    client, modele, instance, configuration = configuration_execution(args, meta, prompts, client=client)
     if reference is not None:
         actuelle = json.loads(configuration)
         differences = sorted(cle for cle in reference.keys() | actuelle.keys()
