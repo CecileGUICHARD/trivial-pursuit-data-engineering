@@ -16,14 +16,20 @@ Télécharger les fichiers ci-dessous depuis GitHub pour les utiliser directemen
 | [`data/silver/questions_avant_dedoublonnage.parquet`](data/silver/questions_avant_dedoublonnage.parquet) | Jalon de conversion au format Parquet. Conserve les 5 299 lignes et les 6 champs bruts du CSV. | 429 316 octets |
 | [`data/silver/questions_dedoublonnees.parquet`](data/silver/questions_dedoublonnees.parquet) | Jalon dédoublonné selon les quatre arbitrages validés, 5 295 questions et 6 champs bruts | 429 259 octets |
 | [`data/silver/questions_normalisees.parquet`](data/silver/questions_normalisees.parquet) | Jalon normalisé validé, 5 295 questions et 6 champs. Les réponses incorrectes sont stockées sous forme de liste. | 424 385 octets |
-| [`data/silver/questions_clean.parquet`](data/silver/questions_clean.parquet) | Corpus définitif du benchmark, 5 295 questions et 10 colonnes. Intègre les huit corrections validées et quatre champs d’enrichissement. | 965 196 octets |
+| [`data/silver/questions_clean.parquet`](data/silver/questions_clean.parquet) | Corpus du benchmark révisé, 5 290 questions et 10 colonnes après les cinq exclusions validées. Intègre les huit corrections historiques et quatre champs d’enrichissement. | 966 677 octets |
 | [`data/silver/diagnostic_anglais_lot2.csv`](data/silver/diagnostic_anglais_lot2.csv) | Diagnostic linguistique du jalon normalisé, avec 1 019 propositions de correction et 11 cas à éclaircir | 334 495 octets |
 | [`data/silver/classement_diagnostic_anglais_lot2.csv`](data/silver/classement_diagnostic_anglais_lot2.csv) | Classement des 1 030 entrées du diagnostic par catégorie, risque et modalité de validation, utilisé pour préparer l’arbitrage | 600 327 octets |
-| [`data/silver/rapport_qualite_silver.csv`](data/silver/rapport_qualite_silver.csv) | Rapport définitif de 1 035 entrées. Consigne les décisions, les textes avant et après arbitrage et les limites du benchmark. | 817 580 octets |
+| [`data/silver/rapport_qualite_silver.csv`](data/silver/rapport_qualite_silver.csv) | Rapport de 1 045 entrées avec les décisions historiques et les dix lignes GARDER/EXCLURE des cinq groupes. | 822 814 octets |
+| [`data/bronze/gemma_p1_choices.parquet`](data/bronze/gemma_p1_choices.parquet) | 530 tentatives brutes de Gemma 4 E2B pour `P1_choices` | 54 301 octets |
+| [`data/bronze/gemma_p2_expert.parquet`](data/bronze/gemma_p2_expert.parquet) | 530 tentatives brutes de Gemma 4 E2B pour `P2_expert` | 54 296 octets |
+| [`data/silver/gemma_p1_choices.parquet`](data/silver/gemma_p1_choices.parquet) | 530 résultats structurés pour `P1_choices` | 52 550 octets |
+| [`data/silver/gemma_p2_expert.parquet`](data/silver/gemma_p2_expert.parquet) | 530 résultats structurés pour `P2_expert` | 52 545 octets |
+| [`data/silver/pilot_lot2/pilot_question_ids.parquet`](data/silver/pilot_lot2/pilot_question_ids.parquet) | Manifeste définitif des 530 questions du pilote | 38 037 octets |
+| [`data/silver/pilot_lot2/manifest_metadata.json`](data/silver/pilot_lot2/manifest_metadata.json) | Empreintes du manifeste, du corpus de tirage et du Silver révisé | 991 octets |
 
 Les trois CSV de qualité utilisent le point-virgule comme séparateur. Le diagnostic et son classement documentent les propositions. Le rapport définitif indique celles qui ont été appliquées.
 
-Le manifeste définitif `data/silver/pilot_lot2/pilot_question_ids.parquet` et les exports `data/silver/gemma_p1_choices.parquet` et `data/silver/gemma_p2_expert.parquet` pourront être versionnés après validation du pilote et contrôle des fichiers. L’essai historique, les copies du candidat final, les fichiers temporaires et le journal de reprise restent locaux.
+Les fichiers du pilote Gemma sont répartis entre les mesures brutes de Bronze et les résultats structurés de Silver. Le journal DuckDB de reprise, l’essai historique, les copies du candidat final et les fichiers temporaires sont locaux.
 
 ## Source des données
 
@@ -80,7 +86,7 @@ Cette étape lit le Parquet de conversion, applique les arbitrages validés et �
 python preparer_silver.py finaliser
 ```
 
-La commande écrit le Parquet candidat et le rapport qualité dans `data/silver/candidat_final/`. Le lot 2 validé est publié dans `data/silver/questions_clean.parquet`, avec `data/silver/rapport_qualite_silver.csv`. [Publication du Silver définitif](documentation/CURRENT.md#publication-du-silver-définitif)
+La commande reproduit le Parquet candidat et le rapport qualité dans `data/silver/candidat_final_5290/`. Les dix couples identifiant–libellé sont vérifiés avant exclusion. `python preparer_silver.py controler-doublons` contrôle en lecture seule le corpus courant `data/silver/questions_clean.parquet`. [Révision du Silver](documentation/CURRENT.md#révision-du-silver-après-les-cinq-arbitrages)
 
 ### Pilote après validation
 
@@ -91,7 +97,23 @@ La commande historique `preparer_silver.py pilote` reste suspendue. Les deux fic
 | `questions_benchmark.parquet` | 5 295 questions normalisées, identifiants stables, propositions ordonnées et lettres attendues |
 | `pilot_question_ids.parquet` | 530 identifiants tirés avec la seed 42 par catégorie, difficulté et type, dans l’ordre du pilote |
 
-Le pilote utilisera Gemma 4 E2B via LM Studio sur les mêmes questions avec `P1_choices` (une lettre pour un QCM, `True` ou `False` pour un vrai/faux) et `P2_expert` (mêmes consignes, avec ajout du rôle d’expert en culture générale). Les réponses réelles seront conservées dans Silver et serviront au calcul de la précision, des latences, du respect du format, des erreurs techniques et de la durée. La durée observée servira à estimer le temps à prévoir par prompt. La validation de l’utilisatrice est requise avant le benchmark complet ou le choix d’un deuxième modèle. [Protocole détaillé](documentation/ARCHITECTURE.md#benchmark)
+Le pilote clôturé utilise les mêmes 530 questions avec `P1_choices` et `P2_expert`. Toutes appartiennent au Silver révisé. Pour vérifier le manifeste et reproduire les résultats Silver à partir des Parquet Bronze, lancer avec `.venv` activé.
+
+```bash
+python pilote_gemma.py manifeste
+python pilote_gemma.py structurer
+```
+
+Ces commandes fonctionnent hors ligne avec les fichiers versionnés. Avec le journal local, `python pilote_gemma.py reconstruire-bronze` reproduit aussi les exports Bronze et `python pilote_gemma.py bilan` affiche les métriques et les durées actives.
+
+Pour une collecte autorisée ou une reprise, démarrer le serveur local LM Studio et relever sa version et le moteur sélectionné. Le script détecte Gemma 4 E2B et le charge à 4 096 tokens si aucune instance de ce modèle n’est chargée. Si une instance utilise déjà un autre contexte, charger une instance dédiée à 4 096 tokens avec `lms load google/gemma-4-e2b --identifier gemma-pilote-lot3 --context-length 4096`.
+
+```bash
+python pilote_gemma.py executer --lm-studio-version '0.4.28+2' \
+  --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1'
+```
+
+Adapter les versions à l’installation utilisée. Avec le serveur Windows et le client WSL, ajouter `--curl /mnt/c/Windows/System32/curl.exe` si le port est accessible côté Windows uniquement. La reprise réutilise le journal local et la même configuration. Chaque export périodique enregistre d’abord le Bronze, puis produit le Silver correspondant. L’accord de l’utilisatrice est requis avant le benchmark complet ou le choix d’un deuxième modèle. [Protocole détaillé](documentation/ARCHITECTURE.md#benchmark)
 
 ### Reproduire la collecte dans un répertoire dédié
 

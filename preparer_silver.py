@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from collections import Counter
+from collections import Counter, defaultdict
 import csv
 from hashlib import sha256
 from html import unescape
@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 from string import ascii_uppercase
 from tempfile import TemporaryDirectory
-from unicodedata import normalize
+from unicodedata import category, normalize
 
 import duckdb
 import pandas as pd
@@ -23,7 +23,7 @@ QUESTIONS_NORMALISEES = SILVER.with_name("questions_normalisees.parquet")
 QUESTIONS_BENCHMARK = SILVER.with_name("questions_benchmark.parquet")
 MANIFESTE_PILOTE = SILVER.with_name("pilot_question_ids.parquet")
 CLASSEMENT = SILVER.with_name("classement_diagnostic_anglais_lot2.csv")
-CANDIDAT = SILVER.parent / "candidat_final"
+CANDIDAT = SILVER.parent / "candidat_final_5290"
 RAPPORT_QUALITE = "rapport_qualite_silver.csv"
 SEED_PILOTE = 42
 COLONNES_STRATES = ("category", "difficulty", "type")
@@ -39,9 +39,51 @@ SCHEMA_FINAL = (
     ("category_id", "INTEGER"),
 )
 NOMBRE_QUESTIONS = 5295
+NOMBRE_QUESTIONS_FINAL = 5290
 EMPREINTE_BRONZE = "cd2b093512002f0e58c0c9f04fb1bc84ee7168d86c7b6e1f8e4d4a1f60e73d99"
 EMPREINTE_NORMALISEES = "5434aa0bea5441f11e66882ec666d86479b34399bbfe9b03e8ddb68253238ee7"
 EMPREINTE_CLASSEMENT = "de05d1f34af9fb408d3c757a3fa8f3773434679993a582ca44da71150bf06d61"
+EMPREINTE_SILVER_INITIAL = "0274c8a547a78b4a6673dca152144988403d9a1cd1b6425ebba33d1e349da736"
+
+# CSV GARDER/EXCLURE validé par l’utilisatrice. Chaque paire donne le couple
+# (question_id, libellé exact) à garder, celui à exclure, puis le motif fourni.
+ARBITRAGES_DOUBLONS_SILVER = (
+    (
+        ("42b00d831db5acb82c7972c2cab81969ac5e1b6506645b7fdf910821c2f67812",
+         '"Nephelococcygia" is the practice of doing what?'),
+        ("864ac6d95a7aeebf68e4f0cdcc105d2bbccd085a938b511f3ca8873c797410b0",
+         "Nephelococcygia is the practice of doing what?"),
+        "Même catégorie, mêmes réponses, seuls les guillemets diffèrent. Version avec le mot entre guillemets gardée.",
+    ),
+    (
+        ("295100cf268de04bb8bb3521ed1b878fe6ce87f252ff18ca53afad1af602a9c0",
+         "If you planted the seeds of Quercus robur, what would grow?"),
+        ("984b1b65b94a3d49f3b9f279c7f7085bacf6f4e08c2839775732c2d75a9ee900",
+         "If you planted the seeds of Quercus robur what would grow?"),
+        "Même question et bonne réponse. Version gardée sans faute (Vegetables, pas Vegtables) et bien ponctuée.",
+    ),
+    (
+        ("f5b08e7a2540194b30d078443ee24c1394a582b899b4434f5f460f41dfb74c14",
+         "What is the hottest planet in the Solar System?"),
+        ("72d3336c3036bfae3d341a4cc0e0a3782441aa74d751f44d95997115a95ac744",
+         "What is the hottest planet in the solar system"),
+        "Même catégorie, mêmes réponses dans un autre ordre. Version gardée bien ponctuée.",
+    ),
+    (
+        ("802293658c82b53d8e553e5f3779f50b0a16bae0f0ca0fbb7b6e9995de27be48",
+         "What is the largest country in the world?"),
+        ("85f36f28271c2d6bc9eb2dcc0545b7dd9fd9e12f90921070167eeb8cb7d071ec",
+         "What is the largest country in the world ?"),
+        "Même question. Version gardée bien ponctuée, réponse Russia, United States plus crédible que Brazil.",
+    ),
+    (
+        ("b8dcf6ccc470dd3875a6e10f5b0841a24731ea52943d76f4e2ab0b3516016e47",
+         "Who painted The Starry Night?"),
+        ("0771af17087fe4f3c9163d7b1e318f0fca9681ac7de24f40bf081bacf566c61a",
+         'Who painted "The Starry Night"?'),
+        "Même question et bonne réponse (Vincent van Gogh). Choix de l'équipe : version sans guillemets.",
+    ),
+)
 
 # Catalogue publié à https://opentdb.com/api_category.php, vérifié le 24 novembre 2026.
 CATEGORIES_OPENTDB = {
@@ -294,9 +336,35 @@ def lire_parquet(chemin, schema):
     return [dict(zip(relation.columns, ligne, strict=True)) for ligne in relation.fetchall()]
 
 
-def verifier_questions(questions):
-    if len(questions) != NOMBRE_QUESTIONS:
-        raise ValueError(f"{NOMBRE_QUESTIONS} questions attendues, {len(questions)} lues.")
+def cle_comparaison_libelle(libelle):
+    texte = normalize("NFC", libelle.casefold())
+    return "".join(
+        caractere for caractere in texte
+        if not caractere.isspace() and not category(caractere).startswith("P")
+        and caractere not in "`´ʻʼ"
+    )
+
+
+def doublons_libelles(questions):
+    groupes = defaultdict(list)
+    for ligne in questions:
+        groupes[cle_comparaison_libelle(ligne["question"])].append(ligne)
+    return [groupe for groupe in groupes.values() if len(groupe) > 1]
+
+
+def afficher_doublons_libelles(questions):
+    groupes = doublons_libelles(questions)
+    effectif = sum(map(len, groupes))
+    print(f"Contrôle des libellés sans ponctuation, guillemets, casse ni espaces : "
+          f"{len(groupes)} groupes, {effectif} questions signalées.")
+    for rang, groupe in enumerate(groupes, start=1):
+        for ligne in groupe:
+            print(f"  {rang}. {ligne['question_id']} — {ligne['question']}")
+
+
+def verifier_questions(questions, nombre_attendu=NOMBRE_QUESTIONS):
+    if len(questions) != nombre_attendu:
+        raise ValueError(f"{nombre_attendu} questions attendues, {len(questions)} lues.")
     for rang, ligne in enumerate(questions, start=1):
         distracteurs = ligne["incorrect_answers"]
         if not isinstance(distracteurs, list):
@@ -437,7 +505,23 @@ def verifier_finalisation(source, final, corrections):
                 raise ValueError(f"Reproductibilité en échec pour {ligne['question_id']} ({champ}).")
 
 
-def ecrire_rapport_qualite(chemin, classement, source, final):
+def appliquer_arbitrages_doublons(questions):
+    par_id = {ligne["question_id"]: ligne for ligne in questions}
+    decisions = {}
+    for groupe, (garder, exclure, motif) in enumerate(ARBITRAGES_DOUBLONS_SILVER, start=1):
+        for decision, (question_id, libelle) in (("GARDER", garder), ("EXCLURE", exclure)):
+            if question_id not in par_id or par_id[question_id]["question"] != libelle or question_id in decisions:
+                raise ValueError(f"Groupe {groupe} : identifiant ou libellé incohérent pour {question_id}.")
+            decisions[question_id] = (groupe, decision, motif)
+        if cle_comparaison_libelle(garder[1]) != cle_comparaison_libelle(exclure[1]):
+            raise ValueError(f"Groupe {groupe} : les clés de comparaison diffèrent.")
+    exclus = {question_id for question_id, (_, decision, _) in decisions.items() if decision == "EXCLURE"}
+    conservees = [ligne for ligne in questions if ligne["question_id"] not in exclus]
+    verifier_questions(conservees, NOMBRE_QUESTIONS_FINAL)
+    return conservees, decisions
+
+
+def ecrire_rapport_qualite(chemin, classement, source, enrichies, arbitrages):
     entrees = list(classement)
     par_rang = {int(entree["rang_silver"]): entree for entree in classement}
     nouveaux_ids = PROPOSITIONS_NON_RETENUES.keys() - {entree["id_proposition"] for entree in entrees}
@@ -463,7 +547,7 @@ def ecrire_rapport_qualite(chemin, classement, source, final):
         identifiant = entree["id_proposition"]
         rang = int(entree["rang_silver"])
         ancienne_valeur = entree["texte_original"]
-        nouvelle_valeur = valeur_champ(final[rang - 1], entree["champ"])
+        nouvelle_valeur = valeur_champ(enrichies[rang - 1], entree["champ"])
         if identifiant in CORRECTIONS_VALIDEES:
             decision = "Appliquée"
             texte_arbitre = CORRECTIONS_VALIDEES[identifiant]
@@ -482,7 +566,33 @@ def ecrire_rapport_qualite(chemin, classement, source, final):
             "texte_avant": ancienne_valeur,
             "texte_apres": nouvelle_valeur,
             "limite_benchmark": limite,
-            "question_id": final[rang - 1]["question_id"],
+            "question_id": enrichies[rang - 1]["question_id"],
+        })
+
+    for rang, ligne in enumerate(enrichies, start=1):
+        question_id = ligne["question_id"]
+        if question_id not in arbitrages:
+            continue
+        groupe, decision, motif = arbitrages[question_id]
+        rapport.append({
+            **dict.fromkeys(rapport[0], ""),
+            "id_proposition": f"D{groupe:02d}-{decision}",
+            "statut": "Arbitrage de doublon validé",
+            "categorie_validation": "Doublon de libellé",
+            "groupe_validation": str(groupe),
+            "role_champ": "Question",
+            "rang_silver": str(rang),
+            "champ": "question",
+            "type": ligne["type"],
+            "justification": motif,
+            "sha256_silver_source": EMPREINTE_SILVER_INITIAL,
+            "question_contexte": ligne["question"],
+            "bonne_reponse_contexte": ligne["correct_answer"],
+            "texte_original": ligne["question"],
+            "decision_finale": decision,
+            "texte_avant": ligne["question"],
+            "texte_apres": ligne["question"] if decision == "GARDER" else "",
+            "question_id": question_id,
         })
 
     rapport.sort(key=lambda entree: entree["id_proposition"])
@@ -513,7 +623,9 @@ def finaliser_silver():
     verifier_questions(source)
     classement = lire_classement()
     questions, corrections = appliquer_corrections(source, classement)
-    final = [enrichir_ligne(ligne) for ligne in questions]
+    enrichies = [enrichir_ligne(ligne) for ligne in questions]
+    verifier_finalisation(source, enrichies, corrections)
+    final, arbitrages = appliquer_arbitrages_doublons(enrichies)
     donnees = pd.DataFrame.from_records(final).astype({"category_id": "int32"})
 
     with TemporaryDirectory(dir=SILVER.parent) as temporaire:
@@ -525,8 +637,7 @@ def finaliser_silver():
         relu = lire_parquet(parquet, SCHEMA_FINAL)
         if relu != final:
             raise ValueError("Le Parquet relu diffère des enregistrements enrichis.")
-        verifier_finalisation(source, relu, corrections)
-        decisions = ecrire_rapport_qualite(rapport, classement, source, relu)
+        decisions = ecrire_rapport_qualite(rapport, classement, source, enrichies, arbitrages)
         for chemin, attendu in empreintes_avant.items():
             if empreinte_fichier(chemin) != attendu:
                 raise ValueError(f"Fichier protégé modifié pendant l’exécution : {chemin.name}.")
@@ -546,9 +657,14 @@ def finaliser_silver():
     total_categories = len({ligne["category"] for ligne in relu})
     print(f"Candidat : {len(relu)} × {len(SCHEMA_FINAL)}, {total_types['multiple']} QCM, "
           f"{total_types['boolean']} vrai/faux et {total_categories} catégories.")
-    print(f"Arbitrage : {len(corrections)} champs corrigés, aucune exclusion. Rapport : {dict(decisions)}.")
+    print(f"Arbitrage : {len(corrections)} corrections historiques et {len(enrichies) - len(relu)} exclusions validées. "
+          f"Rapport : {dict(decisions)}.")
     print("Contrôles source et candidat : valeurs et types conformes, 0 doublon strict, "
           "0 libellé répété avec ou sans distinction de casse.")
+    print("Avant exclusions :")
+    afficher_doublons_libelles(enrichies)
+    print("Après exclusions :")
+    afficher_doublons_libelles(relu)
     print("Relecture : schéma et valeurs identiques, identifiants uniques, "
           "4/2 choix et réponses attendues cohérents. Reproductibilité vérifiée après permutation.")
     print("Les six champs source sont conservés hors arbitrage. Empreintes Bronze et Silver contrôlées.")
@@ -598,7 +714,8 @@ def preparer_pilote():
 def main():
     parser = ArgumentParser(description="Préparer les questions Silver et l’échantillon du pilote.")
     parser.add_argument(
-        "etape", nargs="?", choices=("convertir", "dedoublonner", "normaliser", "finaliser", "pilote", "tout"),
+        "etape", nargs="?",
+        choices=("convertir", "dedoublonner", "normaliser", "finaliser", "controler-doublons", "pilote", "tout"),
         default="tout", help="finaliser produit le candidat Silver et son rapport qualité",
     )
     args = parser.parse_args()
@@ -611,6 +728,8 @@ def main():
         normaliser_parquet()
     if args.etape == "finaliser":
         finaliser_silver()
+    if args.etape == "controler-doublons":
+        afficher_doublons_libelles(lire_parquet(SILVER, SCHEMA_FINAL))
     if args.etape == "pilote":
         preparer_pilote()
 

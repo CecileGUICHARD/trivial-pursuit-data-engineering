@@ -16,6 +16,13 @@ Le projet est un benchmark de LLM locaux pour le cours D42 du M1 Big Data & IA. 
 - Utiliser des chemins portables, notamment avec `pathlib`. Réutiliser `.venv` et justifier toute nouvelle dépendance.
 - Justifier les choix techniques importants pour la soutenance. Soumettre les arbitrages à l’utilisatrice et attendre sa validation avant de développer les étapes suivantes.
 
+## Pilote du benchmark
+
+- Préparer et contrôler Silver avant de démarrer les inférences. Utiliser le manifeste du Silver définitif `data/silver/pilot_lot2/pilot_question_ids.parquet` pour rejouer les mêmes questions dans le même ordre.
+- Utiliser Gemma 4 E2B via LM Studio et les deux prompts `P1_choices` et `P2_expert`. Garder les propositions, leur ordre et les paramètres du modèle identiques. L’ajout du rôle d’expert est la seule différence entre les prompts.
+- Enregistrer les réponses brutes, latences, configurations et erreurs techniques dans une table Bronze par modèle et prompt. Produire le Silver structuré à partir du Bronze et des réponses attendues. Calculer les métriques à partir des mesures réelles et réutiliser les réponses du pilote lors de la reprise. [Protocole de mesure](documentation/ARCHITECTURE.md#benchmark)
+- Attendre la validation de l’utilisatrice avant le benchmark complet ou le choix d’un deuxième modèle.
+
 ## Git et GitHub
 
 - Respecter `.gitignore`. Laisser par défaut hors de Git les données générées, les bases DuckDB et `.venv`. Garder les jetons, mots de passe et autres secrets hors du dépôt et de toute publication.

@@ -15,6 +15,8 @@ __pycache__/
 /data/bronze/*
 !/data/bronze/.gitkeep
 !/data/bronze/questions_raw.csv
+!/data/bronze/gemma_p1_choices.parquet
+!/data/bronze/gemma_p2_expert.parquet
 /data/silver/*
 !/data/silver/.gitkeep
 !/data/silver/questions_avant_dedoublonnage.parquet
@@ -24,6 +26,8 @@ __pycache__/
 !/data/silver/diagnostic_anglais_lot2.csv
 !/data/silver/classement_diagnostic_anglais_lot2.csv
 !/data/silver/rapport_qualite_silver.csv
+!/data/silver/gemma_p1_choices.parquet
+!/data/silver/gemma_p2_expert.parquet
 /data/gold/*
 !/data/gold/.gitkeep
 
@@ -31,10 +35,9 @@ __pycache__/
 !/data/silver/pilot_lot2/
 /data/silver/pilot_lot2/*
 
-# Décommenter ces exceptions après validation du pilote et contrôle des fichiers.
-#!/data/silver/pilot_lot2/pilot_question_ids.parquet
-#!/data/silver/gemma_p1_choices.parquet
-#!/data/silver/gemma_p2_expert.parquet
+# Manifeste validé et empreintes nécessaires pour le relire.
+!/data/silver/pilot_lot2/pilot_question_ids.parquet
+!/data/silver/pilot_lot2/manifest_metadata.json
 
 # Bases de données locales, fichiers temporaires et logs
 *.duckdb

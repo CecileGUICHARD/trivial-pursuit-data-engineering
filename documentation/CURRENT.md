@@ -1,6 +1,6 @@
 # État d’avancement
 
-Mis à jour le 24 novembre 2026. Le lot 2 est clos. L’utilisatrice a validé définitivement le Silver de 5 295 lignes × 10 colonnes, publié dans `data/silver/questions_clean.parquet`. Il part du jalon `data/silver/questions_normalisees.parquet` et applique les huit corrections autorisées. Le pilote généré au cours de l’essai reste provisoire.
+Mis à jour le 24 novembre 2026. Le lot 3 est clos. L’utilisatrice a validé le Silver révisé de 5 290 lignes × 10 colonnes et la conservation des 1 060 inférences du pilote Gemma. Les mesures Bronze et les résultats Silver sont prêts à être relus séparément.
 
 ## Travail réalisé
 
@@ -79,8 +79,9 @@ Les dimensions ont été relues dans les métadonnées des fichiers existants. L
 | `questions_normalisees.parquet` | 5 295 × 6 | Résultat validé des étapes 2 à 5. `incorrect_answers` est une liste de textes. | `preparer_silver.py normaliser` | À conserver comme jalon Silver validé et base du lot 2. |
 | `questions_benchmark.parquet` | 5 295 × 9 | Essai de préparation sur tout le Silver dédoublonné. Décodage HTML, Unicode NFC, retrait des espaces périphériques, conversion des mauvaises réponses JSON en liste. Ajout de `question_id` (SHA-256 du contenu normalisé), `choices` (ordre déterministe avec la seed 42) et `correct_choice` (lettre attendue). | `preparer_silver.py pilote` | Facultatif comme trace de l’essai. Préparation non validée. |
 | `pilot_question_ids.parquet` | 530 × 3 | Manifeste issu des données d’essai en mémoire, dans la même exécution que la création de `questions_benchmark.parquet`. Échantillonnage stratifié par catégorie, difficulté et type avec la seed 42. Seuls le rang, l’identifiant et la seed sont enregistrés. | `preparer_silver.py pilote` | Trace provisoire, invalide pour le benchmark final. |
-| `candidat_final/questions_clean.parquet` | 5 295 × 10 | Six champs source, huit corrections validées et quatre champs d’enrichissement. | `preparer_silver.py finaliser` | Copie du candidat validé. |
-| `questions_clean.parquet` | 5 295 × 10 | Corpus Silver définitif pour le benchmark. | Publication du candidat après accord explicite. | Livrable du lot 2. |
+| `candidat_final/questions_clean.parquet` | 5 295 × 10 | Six champs source, huit corrections validées et quatre champs d’enrichissement. | Première finalisation du lot 2. | Corpus historique du tirage Gemma. |
+| `candidat_final_5290/questions_clean.parquet` | 5 290 × 10 | Corpus enrichi après les cinq arbitrages de doublons. | `preparer_silver.py finaliser` | Candidat reproductible. |
+| `questions_clean.parquet` | 5 290 × 10 | Corpus Silver courant pour le benchmark. | Publication du candidat après accord explicite. | Livrable Silver révisé. |
 
 ## Constats sur l’essai provisoire
 
@@ -129,16 +130,49 @@ L’empreinte SHA-256 mesurée avant la publication était `0274c8a547a78b4a6673
 
 ## Publication du Silver définitif
 
-Le 24 novembre 2026, l’utilisatrice a donné sa validation définitive au candidat de 5 295 lignes × 10 colonnes et accepté l’écart résiduel des effectifs du rapport qualité comme non bloquant. Le fichier validé a été publié par copie et remplacement atomique. Le rapport a été repris tel quel avec les décisions, les avant/après et les limites du benchmark. Aucun contrôle supplémentaire n’a été exécuté à la publication. [Silver définitif](../data/silver/questions_clean.parquet), [rapport qualité publié](../data/silver/rapport_qualite_silver.csv), [jalon dédoublonné archivé](../data/silver/questions_dedoublonnees.parquet)
+Le 24 novembre 2026, l’utilisatrice a donné sa validation définitive au candidat de 5 295 lignes × 10 colonnes et accepté l’écart résiduel des effectifs du rapport qualité comme non bloquant. Le fichier validé a été publié par copie et remplacement atomique. Le rapport a été repris tel quel avec les décisions, les avant/après et les limites du benchmark. Aucun contrôle supplémentaire n’a été exécuté à la publication. [Candidat historique](../data/silver/candidat_final/questions_clean.parquet) · [Rapport historique](../data/silver/candidat_final/rapport_qualite_silver.csv)
 
 La vérification en lecture seule du 24 novembre confirme que le Parquet et le rapport publiés sont identiques aux fichiers du candidat. Le SHA-256 du Parquet publié correspond à l’empreinte du candidat ci-dessus. La relecture a vérifié les huit corrections, les 5 295 identifiants uniques, leur recalcul, la cohérence des choix et des réponses attendues, ainsi que le rattachement du rapport aux identifiants du Silver définitif.
 
-GitHub donne accès au CSV Bronze, aux quatre jalons Parquet Silver et aux trois CSV de qualité. Les tailles et les schémas ont été vérifiés en lecture seule. La conversion, le dédoublonnage et la normalisation concordent avec les transformations documentées. Le diagnostic et son classement concordent avec les entrées reprises dans le rapport définitif. La recherche de secrets et de données confidentielles dans les textes et les métadonnées Parquet n’a rien relevé. Les liens et les tailles sont dans le [README](../README.md#jeux-de-données-disponibles-sur-github).
+La première publication GitHub a partagé le CSV Bronze, les quatre jalons Parquet Silver et les trois CSV de qualité. Les tailles et les schémas ont été vérifiés en lecture seule. La conversion, le dédoublonnage et la normalisation concordent avec les transformations documentées. Le diagnostic et son classement concordent avec les entrées reprises dans le rapport historique. La recherche de secrets et de données confidentielles dans les textes et les métadonnées Parquet n’a rien relevé.
+
+## Révision du Silver après les cinq arbitrages
+
+Les dix couples `question_id` et libellé exact du CSV arbitré concordent avec le corpus initial. Les cinq décisions `EXCLURE` concernent Nephelococcygia, le chêne *Quercus robur*, la planète la plus chaude, le plus grand pays et *The Starry Night*. Le contrôle neutralisant ponctuation, guillemets, casse et espaces a signalé cinq groupes avant application et zéro après. Les cinq exclusions laissent 4 501 QCM et 789 vrai/faux sur 24 catégories. La comparaison ligne à ligne confirme l’égalité des dix champs et de l’ordre relatif pour les 5 290 questions conservées.
+
+`preparer_silver.py finaliser` a reproduit le candidat et le rapport à la seconde exécution. Le rapport ajoute les cinq décisions `GARDER` et les cinq décisions `EXCLURE` aux 1 035 entrées historiques. Les nouveaux rangs d’audit renvoient au corpus enrichi de 5 295 questions avant exclusion. Le SHA-256 du corpus révisé est `af2e683573b68effb0832fff695e3acfeb138e3a67449ebd306814a00f67a92e`. [Silver révisé](../data/silver/questions_clean.parquet) · [Rapport qualité révisé](../data/silver/rapport_qualite_silver.csv)
+
+## Pilote Gemma 4 E2B sur le Silver définitif
+
+L’utilisatrice a approuvé le protocole du lot 3 et le tirage stratifié avec la seed 42. `pilote_gemma.py manifeste` a sélectionné 530 identifiants du Silver initial, soit 10,01 % des 5 295 questions, dans 109 des 141 strates et les 24 catégories. Le tirage a donné les mêmes identifiants dans le même ordre après inversion des lignes source. [Manifeste du pilote](../data/silver/pilot_lot2/pilot_question_ids.parquet) · [Métadonnées et empreintes](../data/silver/pilot_lot2/manifest_metadata.json)
+
+Le manifeste compte 454 QCM et 76 vrai/faux, dont 179 faciles, 242 intermédiaires et 109 difficiles. Son SHA-256 est `f130cda8a5ca4c21c2a40016d3154d3f37bcb9de9c94446814afc460687305e5`.
+
+Aucune des cinq exclusions ne figure au pilote. Le manifeste a conservé son empreinte initiale. Les métadonnées distinguent le corpus de tirage et le corpus actif, et l’empreinte de reprise a été révisée dans le journal. Les 1 060 enregistrements préservent leurs configurations historiques. Un essai de reprise sur une copie du journal a confirmé que le contrôle des empreintes et la relecture aboutissent hors réseau.
+
+Le script utilise Gemma 4 E2B Q4_K_M dans LM Studio `0.4.28+2`, avec le moteur Vulkan llama.cpp `2.80.1`. Depuis WSL, le client `curl.exe` accède au serveur Windows sur la boucle locale. Une instance dédiée à 4 096 tokens sert les deux blocs. Des essais synthétiques ont vérifié le scoring strict, le traitement d’un délai expiré et d’une réponse illisible, la reprise sans duplication après interruption et le rejet d’une configuration différente. [Script d’exécution](../pilote_gemma.py) · [Protocole du benchmark](ARCHITECTURE.md#benchmark)
+
+### Résultats du pilote
+
+Les 1 060 tentatives ont été reprises du journal local. Les deux tables Bronze de 530 lignes conservent les réponses brutes, temps, statuts, identifiants et configurations d’origine. Les deux tables Silver de 530 lignes ont été régénérées à partir du Bronze et des réponses attendues. La comparaison ligne par ligne avec le journal confirme les mêmes valeurs, les 1 060 UUID uniques, les scores d’origine et l’ordre du manifeste. [Bronze P1](../data/bronze/gemma_p1_choices.parquet) · [Bronze P2](../data/bronze/gemma_p2_expert.parquet) · [Silver P1](../data/silver/gemma_p1_choices.parquet) · [Silver P2](../data/silver/gemma_p2_expert.parquet)
+
+Le nouveau flux a été testé hors ligne avec un journal vierge, un export vide, un délai d’attente expiré, une réponse hors format et une reprise après collecte. Le journal local d’origine est resté identique. La reconstruction et la structuration ont utilisé les mesures existantes. Les inférences restantes attendent l’accord de l’utilisatrice.
+
+| Mesure | `P1_choices` | `P2_expert` |
+| --- | ---: | ---: |
+| Réponses correctes sur 530 | 301 (56,79 %) | 304 (57,36 %) |
+| QCM corrects sur 454 | 252 | 257 |
+| Vrai/faux corrects sur 76 | 49 | 47 |
+| Réponses conformes | 530 (100 %) | 530 (100 %) |
+| Erreurs techniques | 0 | 0 |
+| Latence moyenne | 0,594 s | 0,618 s |
+| Latence médiane | 0,559 s | 0,584 s |
+| Durée active mesurée | 378,81 s | 392,25 s |
+| Projection sur les 5 290 questions | 1 h 03 min 01 s | 1 h 05 min 15 s |
+| Temps restant en réutilisant le pilote | 56 min 42 s | 58 min 43 s |
+
+Sur les 530 paires, 11 questions sont correctes uniquement avec `P2_expert` et huit uniquement avec `P1_choices`. L’écart d’exactitude observé est de 0,57 point en faveur de `P2_expert`. La durée active cumulée est de 12 min 51 s. En conditions comparables, l’estimation pour les deux prompts est de 2 h 08 min 16 s depuis zéro, ou 1 h 55 min 25 s pour les 4 760 questions restantes par prompt.
 
 ## Prochain jalon
-
-L’échantillonnage sur le Silver définitif attend l’accord sur le protocole et la méthode. Le calcul des seuls quotas selon la méthode proposée donne 530 places, réparties sur 109 des 141 strates et les 24 catégories. La sélection des identifiants et l’écriture du nouveau manifeste se feront après accord. La commande historique `pilote` combine préparation et échantillonnage sur le jalon dédoublonné. Elle reste suspendue pour le benchmark final.
-
-Le pilote Gemma 4 E2B via LM Studio avec `P1_choices` et `P2_expert` attendra ce nouvel échantillon. Les résultats et les mesures restent à produire. [Protocole du benchmark](ARCHITECTURE.md#benchmark)
 
 Attendre la validation de l’utilisatrice avant le traitement complet ou le choix d’un deuxième modèle. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à réaliser.
