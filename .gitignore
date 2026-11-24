@@ -17,14 +17,24 @@ __pycache__/
 !/data/bronze/questions_raw.csv
 /data/silver/*
 !/data/silver/.gitkeep
+!/data/silver/questions_avant_dedoublonnage.parquet
+!/data/silver/questions_dedoublonnees.parquet
+!/data/silver/questions_normalisees.parquet
 !/data/silver/questions_clean.parquet
+!/data/silver/diagnostic_anglais_lot2.csv
+!/data/silver/classement_diagnostic_anglais_lot2.csv
 !/data/silver/rapport_qualite_silver.csv
 /data/gold/*
 !/data/gold/.gitkeep
 
-# Décommenter chaque exception après validation du fichier définitif.
-#!/data/silver/pilot_question_ids.parquet
-#!/data/silver/inference_results.parquet
+# Garder le dossier accessible aux exceptions et ignorer ses fichiers locaux.
+!/data/silver/pilot_lot2/
+/data/silver/pilot_lot2/*
+
+# Décommenter ces exceptions après validation du pilote et contrôle des fichiers.
+#!/data/silver/pilot_lot2/pilot_question_ids.parquet
+#!/data/silver/gemma_p1_choices.parquet
+#!/data/silver/gemma_p2_expert.parquet
 
 # Bases de données locales, fichiers temporaires et logs
 *.duckdb

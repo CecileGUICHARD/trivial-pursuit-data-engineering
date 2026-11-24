@@ -10,19 +10,26 @@ Les livrables attendus sont le dépôt GitHub, une application Streamlit et une 
 
 Télécharger les fichiers ci-dessous depuis GitHub pour les utiliser directement, sans relancer la collecte ni la préparation Silver.
 
-| Fichier | Contenu | Taille |
+| Fichier | Rôle et statut | Taille |
 | --- | --- | ---: |
-| [`data/bronze/questions_raw.csv`](data/bronze/questions_raw.csv) | Collecte OpenTDB brute, 5 299 questions et 6 colonnes | 895 318 octets |
-| [`data/silver/questions_clean.parquet`](data/silver/questions_clean.parquet) | Corpus Silver définitif, 5 295 questions et 10 colonnes | 965 196 octets |
-| [`data/silver/rapport_qualite_silver.csv`](data/silver/rapport_qualite_silver.csv) | Rapport qualité définitif, 1 035 entrées d’arbitrage au format CSV séparé par des points-virgules | 817 580 octets |
+| [`data/bronze/questions_raw.csv`](data/bronze/questions_raw.csv) | Collecte OpenTDB de référence, 5 299 questions et 6 champs bruts | 895 318 octets |
+| [`data/silver/questions_avant_dedoublonnage.parquet`](data/silver/questions_avant_dedoublonnage.parquet) | Jalon de conversion au format Parquet. Conserve les 5 299 lignes et les 6 champs bruts du CSV. | 429 316 octets |
+| [`data/silver/questions_dedoublonnees.parquet`](data/silver/questions_dedoublonnees.parquet) | Jalon dédoublonné selon les quatre arbitrages validés, 5 295 questions et 6 champs bruts | 429 259 octets |
+| [`data/silver/questions_normalisees.parquet`](data/silver/questions_normalisees.parquet) | Jalon normalisé validé, 5 295 questions et 6 champs. Les réponses incorrectes sont stockées sous forme de liste. | 424 385 octets |
+| [`data/silver/questions_clean.parquet`](data/silver/questions_clean.parquet) | Corpus définitif du benchmark, 5 295 questions et 10 colonnes. Intègre les huit corrections validées et quatre champs d’enrichissement. | 965 196 octets |
+| [`data/silver/diagnostic_anglais_lot2.csv`](data/silver/diagnostic_anglais_lot2.csv) | Diagnostic linguistique du jalon normalisé, avec 1 019 propositions de correction et 11 cas à éclaircir | 334 495 octets |
+| [`data/silver/classement_diagnostic_anglais_lot2.csv`](data/silver/classement_diagnostic_anglais_lot2.csv) | Classement des 1 030 entrées du diagnostic par catégorie, risque et modalité de validation, utilisé pour préparer l’arbitrage | 600 327 octets |
+| [`data/silver/rapport_qualite_silver.csv`](data/silver/rapport_qualite_silver.csv) | Rapport définitif de 1 035 entrées. Consigne les décisions, les textes avant et après arbitrage et les limites du benchmark. | 817 580 octets |
 
-Le manifeste d’échantillonnage `data/silver/pilot_question_ids.parquet` et l’export Parquet des résultats LLM `data/silver/inference_results.parquet` pourront être versionnés après validation et contrôle de leurs versions définitives. Le manifeste de l’essai, les autres fichiers intermédiaires et l’état de reprise restent locaux.
+Les trois CSV de qualité utilisent le point-virgule comme séparateur. Le diagnostic et son classement documentent les propositions. Le rapport définitif indique celles qui ont été appliquées.
+
+Le manifeste définitif `data/silver/pilot_lot2/pilot_question_ids.parquet` et les exports `data/silver/gemma_p1_choices.parquet` et `data/silver/gemma_p2_expert.parquet` pourront être versionnés après validation du pilote et contrôle des fichiers. L’essai historique, les copies du candidat final, les fichiers temporaires et le journal de reprise restent locaux.
 
 ## Source des données
 
 Open Trivia Database fournit une API JSON publique sans clé, sous licence CC BY-SA 4.0. Elle autorise jusqu’à 50 questions par appel, avec un intervalle de 5 secondes entre deux appels d’une même adresse IP. Les jetons de session permettent à l’API de suivre les questions déjà renvoyées pendant la collecte. [Documentation OpenTDB](https://opentdb.com/api_config.php)
 
-Les jeux Bronze et Silver sont redistribués sous la licence [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), avec attribution à Open Trivia Database et à ses contributeurs. En Silver, les questions ont été dédoublonnées, normalisées, corrigées selon le rapport qualité et enrichies pour le benchmark.
+Les questions et réponses sont créditées à Open Trivia Database et à ses contributeurs. Les jeux Bronze et Silver et les extraits de ces données dans les rapports sont redistribués sous CC BY-SA 4.0. Bronze conserve les valeurs brutes de l’API. Les jalons Silver documentent la conversion en Parquet, le dédoublonnage, la normalisation, les corrections et l’enrichissement pour le benchmark. En cas de redistribution, conserver l’attribution et le lien vers la licence, signaler les modifications et partager les adaptations sous les mêmes conditions. [Source OpenTDB](https://opentdb.com/api_config.php) · [Licence CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 
 ## Installation sous Debian (WSL)
 

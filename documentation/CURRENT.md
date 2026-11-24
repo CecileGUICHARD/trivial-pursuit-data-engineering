@@ -133,7 +133,7 @@ Le 24 novembre 2026, l’utilisatrice a donné sa validation définitive au cand
 
 La vérification en lecture seule du 24 novembre confirme que le Parquet et le rapport publiés sont identiques aux fichiers du candidat. Le SHA-256 du Parquet publié correspond à l’empreinte du candidat ci-dessus. La relecture a vérifié les huit corrections, les 5 295 identifiants uniques, leur recalcul, la cohérence des choix et des réponses attendues, ainsi que le rattachement du rapport aux identifiants du Silver définitif.
 
-Les trois fichiers téléchargeables depuis GitHub sont le CSV Bronze, le Parquet Silver définitif et le rapport qualité. Avant mise en ligne, leurs tailles et leurs schémas ont été vérifiés en lecture seule. La recherche de secrets et de données confidentielles dans leurs champs textuels et les métadonnées Parquet n’a relevé aucune donnée confidentielle identifiable. Le [README](../README.md#jeux-de-données-disponibles-sur-github) contient les liens et les tailles des fichiers. Le manifeste provisoire reste local.
+GitHub donne accès au CSV Bronze, aux quatre jalons Parquet Silver et aux trois CSV de qualité. Les tailles et les schémas ont été vérifiés en lecture seule. La conversion, le dédoublonnage et la normalisation concordent avec les transformations documentées. Le diagnostic et son classement concordent avec les entrées reprises dans le rapport définitif. La recherche de secrets et de données confidentielles dans les textes et les métadonnées Parquet n’a rien relevé. Les liens et les tailles sont dans le [README](../README.md#jeux-de-données-disponibles-sur-github).
 
 ## Prochain jalon
 
