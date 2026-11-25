@@ -89,6 +89,8 @@ Un clone à jour fournit les sept Parquet validés aux chemins utilisés par le 
 
 Le build lit les Parquet et produit les vues `staging`, la vue d’union, `intermediate.obt_silver` et les sept marts `gold` dans `data/trivial_pursuit.duckdb`. Avec l’OBT déjà matérialisée, utiliser `../.venv/bin/dbt build --profiles-dir . --select path:models/marts` depuis `dbt/` pour reconstruire les seuls marts, puis `../.venv/bin/dbt test --profiles-dir .` pour contrôler l’ensemble du pipeline.
 
+`mart_difficulty` permet de lire les totaux par difficulté avec `type = 'all'` ou de filtrer `multiple` et `boolean` pour la ventilation. Les totaux pondèrent le taux théorique de réussite au hasard par la répartition des questions. `mart_question_type` expose aussi la conformité par type, et `mart_question_outcomes` repère les questions où les six configurations ont fourni la même réponse incorrecte et conforme. [Résultats du complément méthodologique](documentation/CURRENT.md#lot-8-bis--complément-méthodologique-gold)
+
 Pour consulter le lignage, ouvrir `dbt/target/static_index.html`, rechercher `obt_silver` ou `mart_performance` et ouvrir **Lineage Graph**. La page présente aussi les modèles et les tests. Les fichiers générés sous `dbt/target/` restent locaux. [Documentation dbt](https://docs.getdbt.com/reference/commands/cmd-docs) · [Grains et mesures Gold](documentation/ARCHITECTURE.md#gold-et-restitution)
 
 ### Examiner la collecte existante

@@ -6,7 +6,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 ## Sommaire
 
-36 décisions recensées · 29 retenues, 2 abandonnées et 5 remplacées.
+37 décisions recensées · 30 retenues, 2 abandonnées et 5 remplacées.
 
 | Décision | Statut |
 | --- | --- |
@@ -46,6 +46,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 | [DEC-034 · Appliquer la séparation des couches du cours D42](#dec-034--appliquer-la-séparation-des-couches-du-cours-d42) | retenue |
 | [DEC-035 · Publier tous les Parquet définitifs des benchmarks](#dec-035--publier-tous-les-parquet-définitifs-des-benchmarks) | retenue |
 | [DEC-036 · Matérialiser sept marts spécialisés dans Gold](#dec-036--matérialiser-sept-marts-spécialisés-dans-gold) | retenue |
+| [DEC-037 · Ajouter une référence du hasard et le consensus incorrect dans Gold](#dec-037--ajouter-une-référence-du-hasard-et-le-consensus-incorrect-dans-gold) | retenue |
 
 [Informations manquantes et écarts entre les sources](#informations-manquantes-et-écarts-entre-les-sources)
 
@@ -381,6 +382,15 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 - **Choix et justification.** Matérialiser sept tables, chacune au grain demandé. L’OBT fournit la référence unique des scores et latences. `mart_category_gap` réutilise `mart_category` pour garder les mêmes effectifs et règles de calcul. Des marts séparés rendent explicites les dénominateurs et les dimensions de filtre disponibles.
 - **Conséquences et limites.** Les taux gardent leur précision et les réponses hors format restent identifiables. Les 14 tests Gold contrôlent les grains, les mesures et la couverture des paires et configurations. Les 27 tests historiques sont conservés. La restitution à partir de ces marts reste une étape distincte.
 - **Références.** [Grains et calculs Gold](ARCHITECTURE.md#gold-et-restitution) · [Contrôles du lot 8](CURRENT.md#lot-8--construction-de-gold)
+
+### DEC-037 · Ajouter une référence du hasard et le consensus incorrect dans Gold
+
+**Statut** retenue.
+
+- **Contexte.** Le lot 8 bis complète trois des sept marts de DEC-036, à partir du commit `6d17118`. Le choix uniforme au hasard donne des résultats théoriques différents pour les deux types de questions (DEC-006).
+- **Choix et justification.** Ventiler les difficultés par type et conserver les totaux, avec un taux théorique pondéré par les effectifs réels. Exposer l’écart au hasard et la conformité par type. Identifier le consensus incorrect au niveau de la question lorsque les six configurations donnent la même réponse incorrecte et conforme, selon les champs du scoring strict (DEC-022).
+- **Conséquences et limites.** Les trois classes d’`outcome` restent en vigueur. Le consensus ajoute un indicateur et sa valeur commune dans `all_incorrect`. Son effectif est recalculé depuis l’OBT à chaque build. Les taux du hasard servent de référence théorique de choix uniforme.
+- **Références.** [Grains et calculs Gold](ARCHITECTURE.md#gold-et-restitution) · [Contrôles du lot 8 bis](CURRENT.md#lot-8-bis--complément-méthodologique-gold)
 
 ## Informations manquantes et écarts entre les sources
 

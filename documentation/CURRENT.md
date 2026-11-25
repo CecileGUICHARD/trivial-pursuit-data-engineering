@@ -2,7 +2,7 @@
 
 Mis à jour le 25 novembre 2026. Le lot 4 est définitivement clos. L’utilisatrice a validé les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct ainsi que leur comparaison sur les mêmes 5 290 questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`.
 
-L’utilisatrice a validé l’alignement sur le schéma D42. Les sept Parquet constituent Silver et l’OBT est matérialisée dans `dbt intermediate`. L’utilisatrice a validé les sept marts du lot 8 et leurs résultats. [Résultats du lot 8](#lot-8--construction-de-gold)
+L’utilisatrice a validé l’alignement sur le schéma D42. Les sept Parquet constituent Silver et l’OBT est matérialisée dans `dbt intermediate`. Les sept marts du lot 8 sont publiés au commit `6d17118`. L’utilisatrice a validé le complément méthodologique du lot 8 bis. [Résultats du lot 8 bis](#lot-8-bis--complément-méthodologique-gold)
 
 ## Travail réalisé
 
@@ -427,3 +427,26 @@ Chaque comparaison couvre 5 290 paires. Pour P3−P1, Gemma compte 313 gains e
 Le `dbt build` intégral en base de vérification a réussi pour 16 modèles et 41 tests. Le build ciblé dans la base de travail a matérialisé les sept marts et exécuté leurs 14 tests, puis `dbt test` a confirmé les 41 tests, dont les 27 tests historiques. Le catalogue confirme les sept tables et leurs dimensions attendues. La documentation statique du lignage a été régénérée dans `dbt/target/static_index.html`.
 
 Les SHA-256 des 86 fichiers Bronze et Silver concordent. Les définitions des huit vues et de l’OBT, leurs schémas et les valeurs de l’OBT ont été comparés avant et après le build ciblé, avec zéro écart dans les deux sens. L’ancien `data/gold/` ne contenait qu’un `.gitkeep` et le projet dbt écrit dans `data/trivial_pursuit.duckdb`. Ce répertoire vide a été retiré. [Procédure de reconstruction](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
+
+## Lot 8 bis · Complément méthodologique Gold
+
+Dans `data/trivial_pursuit.duckdb`, `mart_difficulty` compte 54 lignes × 9 colonnes, `mart_question_type` 12 × 9 et `mart_question_outcomes` 5 290 × 14. Le taux du hasard est de 25 % pour les 4 501 QCM et de 50 % pour les 789 vrai/faux par configuration. [Grains et définitions](ARCHITECTURE.md#gold-et-restitution)
+
+| Difficulté | QCM | Vrai/faux | Hasard pondéré | Plage des écarts au hasard sur les six configurations |
+| --- | ---: | ---: | ---: | ---: |
+| Facile | 1 405 | 359 | 30,09 % | +16,74 à +33,97 points |
+| Intermédiaire | 2 091 | 333 | 28,43 % | +10,92 à +23,30 points |
+| Difficile | 1 005 | 97 | 27,20 % | +9,28 à +22,44 points |
+
+| Configuration | Écart QCM (points) | Conformité QCM | Écart vrai/faux (points) | Conformité vrai/faux |
+| --- | ---: | ---: | ---: | ---: |
+| Gemma P1 | +29,01 | 100,00 % | +4,75 | 100,00 % |
+| Gemma P2 | +28,83 | 100,00 % | +4,37 | 100,00 % |
+| Gemma P3 | +27,30 | 98,78 % | +0,57 | 100,00 % |
+| Ministral P1 | +28,52 | 99,98 % | +5,13 | 98,61 % |
+| Ministral P2 | +27,70 | 99,96 % | +1,58 | 87,20 % |
+| Ministral P3 | +17,41 | 82,38 % | −15,40 | 58,05 % |
+
+Le comptage de l’OBT confirme 308 consensus incorrects parmi les 1 278 questions `all_incorrect`. Ils se répartissent en 207 QCM et 101 vrai/faux. Les autres effectifs restent à 1 379 questions `all_correct` et 2 633 `mixed`.
+
+Le `dbt build` complet en base de vérification a validé 16 modèles et 41 tests, dont les 27 historiques. Le build ciblé dans la base de travail a validé les trois tables modifiées et leurs six tests. Les totaux par difficulté concordent avec la ventilation, les taux et la conformité avec l’OBT, et le consensus avec un comptage indépendant. Les SHA-256 des 86 fichiers Bronze et Silver concordent. L’OBT et les quatre autres marts conservent leurs schémas et toutes leurs valeurs, et les définitions des huit vues restent identiques. La documentation du lignage a été régénérée dans `dbt/target/static_index.html`. [Procédure de reconstruction](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)

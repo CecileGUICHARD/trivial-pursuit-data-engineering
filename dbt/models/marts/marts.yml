@@ -74,27 +74,26 @@ models:
       - {name: is_tie, description: Égalité exacte des proportions de bonnes réponses.}
 
   - name: mart_difficulty
-    description: Réussite stricte par modèle, prompt et difficulté OpenTDB.
+    description: Réussite stricte et référence du hasard par modèle, prompt, difficulté et type OpenTDB, avec un total tous types.
     data_tests:
       - gold_grain:
-          arguments: {keys: [model_id, prompt_id, difficulty], row_count: 18}
-      - gold_dimension_concordance:
-          arguments: {dimensions: [difficulty]}
+          arguments: {keys: [model_id, prompt_id, difficulty, type], row_count: 54}
     columns:
       - {name: model_id, description: Identifiant du modèle.}
       - {name: prompt_id, description: Identifiant du prompt.}
       - {name: difficulty, description: Niveau de difficulté OpenTDB.}
+      - {name: type, description: 'multiple pour les QCM, boolean pour les vrai/faux, all pour le total tous types.'}
       - *response_count
       - *correct_count
       - *success_pct
+      - {name: chance_pct, description: 'Réussite théorique au hasard, pondérée par les effectifs de chaque type pour le total all.'}
+      - &above_chance_pp {name: above_chance_pp, description: Écart signé entre la réussite stricte et le hasard en points de pourcentage.}
 
   - name: mart_question_type
-    description: Réussite stricte par modèle, prompt et type de question OpenTDB.
+    description: Réussite stricte, référence du hasard et conformité par modèle, prompt et type OpenTDB.
     data_tests:
       - gold_grain:
           arguments: {keys: [model_id, prompt_id, type], row_count: 12}
-      - gold_dimension_concordance:
-          arguments: {dimensions: [type]}
     columns:
       - {name: model_id, description: Identifiant du modèle.}
       - {name: prompt_id, description: Identifiant du prompt.}
@@ -102,6 +101,9 @@ models:
       - *response_count
       - *correct_count
       - *success_pct
+      - {name: chance_pct, description: 'Réussite théorique au hasard, 25 % pour les QCM et 50 % pour les vrai/faux.'}
+      - {name: compliance_pct, description: Pourcentage des réponses avec format_valid à vrai.}
+      - *above_chance_pp
 
   - name: mart_question_outcomes
     description: Une ligne par question, avec son descriptif OpenTDB et son résultat sur les six configurations.
@@ -121,3 +123,5 @@ models:
       - {name: expected_answer, description: Réponse attendue par le scoring strict.}
       - {name: configuration_count, description: Nombre de couples modèle et prompt distincts.}
       - {name: outcome, description: 'Classe all_correct, all_incorrect ou mixed selon les scores stricts.'}
+      - {name: unanimous_wrong, description: Vrai si les six configurations ont donné la même réponse incorrecte et conforme.}
+      - {name: same_wrong_answer, description: Valeur commune de ai_answer en cas de consensus incorrect. NULL sinon.}
