@@ -1,6 +1,6 @@
 # Architecture technique
 
-Le pipeline relie Open Trivia Database (OpenTDB) à un tableau de bord Streamlit. Le [suivi opérationnel](CURRENT.md) indique les étapes déjà réalisées.
+L’architecture cible relie Open Trivia Database (OpenTDB) à un tableau de bord Streamlit. Le lot 4 a livré les fichiers Silver préparés. La One Big Table (OBT) Silver, les jeux Gold et l’application restent à construire. [Suivi opérationnel](CURRENT.md) · [Registre des décisions](DECISIONS.md)
 
 ## Choix validés
 
@@ -11,23 +11,27 @@ flowchart LR
     Conversion --> Questions[Silver · questions dédoublonnées en Parquet]
     Questions --> Normalisees[Silver · questions normalisées en Parquet]
     Normalisees --> Candidat[Silver · candidat final et rapport qualité]
-    Candidat -->|Validation définitive| Benchmark[Silver · questions définitives]
+    Candidat -->|Validation définitive| Benchmark[Silver préparé · corpus OpenTDB]
     Benchmark --> Pilote[Silver · manifeste du pilote]
     Benchmark --> Prompt[Question et choix ordonnés]
     Prompt --> LM[LM Studio · inférences locales]
     Pilote --> LM
     LM --> Journal[Journal DuckDB local]
     Journal --> Mesures[Bronze · Parquet par modèle et prompt]
-    Mesures --> Resultats[Silver · résultats structurés]
+    Mesures --> Resultats[Silver préparé · six Parquet de benchmark]
     Benchmark --> Resultats
-    Benchmark --> Gold[Gold · dbt et DuckDB]
-    Resultats --> Gold
+    Benchmark --> QuestionsStaging[dbt staging · corpus typé]
+    Resultats --> ResultatsStaging[dbt staging · benchmarks typés]
+    ResultatsStaging --> Union[dbt intermediate · UNION ALL des six benchmarks]
+    Union --> OBT[Silver consolidé · OBT dans DuckDB]
+    QuestionsStaging -->|JOIN sur question_id| OBT
+    OBT --> Gold[Gold · jeux analytiques et agrégations dans dbt marts]
     Gold --> App[Streamlit]
 ```
 
 ### Bronze
 
-`collect_opentdb_complet.py` collecte les questions par catégorie, utilise un jeton de session et enregistre la progression dans un fichier local. L’extraction est conservée dans `data/bronze/questions_raw.csv` avec les champs `type`, `difficulty`, `category`, `question`, `correct_answer` et `incorrect_answers`. La liste des réponses incorrectes est sérialisée en JSON dans la cellule CSV. Les entités HTML et les valeurs sources sont conservées pour pouvoir vérifier les transformations ultérieures.
+`collect_opentdb_complet.py` collecte les questions par catégorie, utilise un jeton de session et enregistre la progression dans un fichier local. L’extraction est conservée dans `data/bronze/questions_raw.csv` avec les champs `type`, `difficulty`, `category`, `question`, `correct_answer` et `incorrect_answers`. La liste des réponses incorrectes est sérialisée en JSON dans la cellule CSV. Les entités HTML et les valeurs sources sont conservées pour pouvoir vérifier les transformations ultérieures. Les données brutes OpenTDB et les mesures brutes des LLM restent intactes lors de la consolidation Silver.
 
 ### Silver
 
@@ -66,17 +70,41 @@ Le journal local conserve les horaires et les durées actives des segments. La r
 
 La configuration de reprise du journal pointe vers le SHA-256 du corpus actif. Les configurations par tentative conservent le SHA-256 du corpus effectivement utilisé lors de la mesure. Les 1 060 tentatives du pilote ont servi à reconstruire les deux couches. Le manifeste conserve son empreinte initiale.
 
-Pour le lot 4, `benchmark_gemma.py` copie le journal local du pilote et fixe un manifeste de 5 290 questions. L’ordre reprend les 530 rangs du pilote, puis l’ordre du Silver pour les 4 760 questions restantes. Les deux prompts partagent cet ordre. Le contrôle d’exécution compare le moteur sélectionné et la configuration effective aux paramètres du pilote. Les tables définitives sont versionnées dans `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`. Le journal et le manifeste d’exécution sont locaux.
+Pour le lot 4, `benchmark_gemma.py` copie le journal local du pilote et fixe un manifeste de 5 290 questions. L’ordre reprend les 530 rangs du pilote, puis l’ordre du Silver pour les 4 760 questions restantes. Les deux premiers prompts partagent cet ordre. Le contrôle d’exécution compare le moteur sélectionné et la configuration effective aux paramètres du pilote. Les exports P1 et P2 sont versionnés dans `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`. Le journal et le manifeste d’exécution sont locaux.
 
 `benchmark_gemma.py executer --p3` reprend le même manifeste et initialise `data/silver/benchmark_lot4/benchmark_p3.duckdb` par copie du journal du pilote P3. L’empreinte du manifeste complet remplace celle du pilote dans la configuration de reprise. Chaque tentative du pilote conserve sa configuration, sa réponse brute, son identifiant et sa latence. Le contrôle compare l’empreinte du gabarit et les autres réglages au pilote P3, puis le bloc envoie uniquement les questions dont le journal ne contient pas de tentative. Les réponses hors format sont conservées avec leur score incorrect. Les deux Parquet P3 complets sont locaux, sous `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`. `benchmark_gemma.py bilan --p3` compare les trois prompts depuis les deux journaux complets.
 
 Le contrôle de clôture a retrouvé les 5 290 identifiants du corpus une fois par prompt dans chaque couche. Les trois prompts suivent le même ordre et les champs communs concordent ligne par ligne entre Bronze et Silver, avec 15 870 `inference_id` distincts. Les 530 lignes réutilisées de P3 sont identiques aux lignes du pilote à la relecture des deux couches. Le scoring strict recalculé concorde avec les trois tables Silver. [Résultats et durées définitifs](CURRENT.md#comparaison-complète-des-trois-prompts)
 
+### Sources du Silver préparé
+
+Le corpus OpenTDB final et les six résultats complets Gemma 4 E2B et Ministral 3 3B Instruct restent dans sept Parquet distincts déjà validés. Les chemins sont relatifs à la racine du dépôt.
+
+| Source | Chemin | Volume validé | Disponibilité |
+| --- | --- | ---: | --- |
+| Corpus OpenTDB | `data/silver/questions_clean.parquet` | 5 290 lignes × 10 colonnes | Versionné |
+| Gemma P1 | `data/silver/benchmark_lot4/gemma_p1_choices.parquet` | 5 290 réponses | Versionné |
+| Gemma P2 | `data/silver/benchmark_lot4/gemma_p2_expert.parquet` | 5 290 réponses | Versionné |
+| Gemma P3 | `data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet` | 5 290 réponses | Local |
+| Ministral P1 | `data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet` | 5 290 réponses | Local |
+| Ministral P2 | `data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet` | 5 290 réponses | Local |
+| Ministral P3 | `data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet` | 5 290 réponses | Local |
+
+Les six exports complets incluent déjà les mesures Gemma et Ministral réutilisées lors de la reprise. Les fichiers de pilote séparés et les 13 échecs de transport de la table `echecs_transport_reprise` relèvent de la traçabilité. Les pilotes Bonsai et Qwen sont hors du périmètre de l’OBT et des agrégations Gold. Les réponses reçues hors format restent parmi les résultats à consolider et comptent comme incorrectes au scoring strict. [Arbitrage du deuxième modèle](CURRENT.md#choix-définitif-du-deuxième-modèle) · [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
+
+### One Big Table du Silver consolidé
+
+L’OBT est validée comme cible et reste à construire dans DuckDB avec dbt. `staging` lira et typera les sept Parquet. Dans `intermediate`, un `UNION ALL` réunira les six résultats de benchmark, puis un `JOIN` sur `question_id` rattachera chaque ligne à sa question OpenTDB.
+
+La granularité est une ligne par triplet (`question_id`, `model_id`, `prompt_id`), soit **31 740 lignes attendues** pour **5 290 questions distinctes**, à raison de six inférences par question. La table conservera les identifiants source, dont `inference_id`, ainsi que les réponses brutes, les résultats du scoring strict (`ai_answer`, `ai_correct`, `format_valid`), le statut (`status`) et la latence HTTP en secondes (`response_time`).
+
+Une granularité commune permet d’apparier les mesures par `question_id` pour comparer les modèles à prompt fixé ou les prompts à modèle fixé. Centraliser l’union et la jointure dans dbt permet de reproduire la consolidation à partir des mêmes sources validées et de rattacher chaque résultat à l’inférence d’origine. Les indicateurs Gold appliqueront les mêmes définitions de l’exactitude stricte, de la conformité et des latences à un périmètre commun de réponses reçues. [Définitions des mesures](#benchmark)
+
+La dénormalisation répétera les attributs OpenTDB, comme le libellé, la catégorie et la difficulté, sur six lignes par question. Ce coût de stockage permet aux analyses de réutiliser la jointure préparée. Au niveau de l’OBT, `COUNT(*)` compte les inférences dans le périmètre filtré et `COUNT(DISTINCT question_id)` compte les questions couvertes.
+
 ### Gold et restitution
 
-dbt construit les indicateurs dans DuckDB. Le niveau `staging` lit, standardise et type les sources. Le niveau `intermediate` porte les jointures et les calculs intermédiaires. Le niveau `marts` expose les tables analytiques et les indicateurs destinés à Streamlit. L’application sera développée après la construction des données Gold.
-
-Pour la comparaison Gold, `staging` référencera les exports Silver complets et validés du lot 4, avec trois Parquet par modèle pour Gemma et Ministral. Les répertoires `pilote_bonsai/`, `pilote_qwen/` et `pilote_ministral/` restent locaux pour la traçabilité. Les mesures des pilotes Bonsai et Qwen sont exclues des sources Gold. [Arbitrage du deuxième modèle](CURRENT.md#choix-définitif-du-deuxième-modèle)
+Les couches métier Bronze, Silver et Gold décrivent l’état et l’usage des données. Les dossiers dbt décrivent les étapes de transformation. `dbt/models/staging/` et `dbt/models/intermediate/` serviront à préparer et à consolider Silver dans DuckDB. `dbt/models/marts/` produira les jeux analytiques et les agrégations Gold à partir de l’OBT Silver. Streamlit consommera les résultats Gold.
 
 ### Benchmark
 

@@ -2,6 +2,8 @@
 
 Mis à jour le 25 novembre 2026. Le lot 4 est définitivement clos. L’utilisatrice a validé les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct ainsi que leur comparaison sur les mêmes 5 290 questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`.
 
+La consolidation en One Big Table (OBT) Silver est validée et reste à construire. [Décision et état de mise en œuvre](#consolidation-silver-validée)
+
 ## Travail réalisé
 
 - Debian sous WSL, VS Code et `.venv` opérationnels. Le dépôt GitHub a été initialisé avec le commit `cdb0286` (« Initialisation du projet et extraction Bronze »).
@@ -332,7 +334,7 @@ Le 25 novembre 2026, l’utilisatrice a validé le pilote et retenu **Ministral-
 - **Qwen3 4B Instruct** présentait une durée active extrapolée de 7 h 52 min et une conformité P3 de 0/30.
 - **Ministral 3 3B Instruct** offre le meilleur compromis entre durée, conformité et faisabilité matérielle parmi les pilotes. Il a terminé les 90 inférences sur la machine, avec une conformité de 100 % sur P1 et P2, de 73,3 % sur P3 et une durée active extrapolée de 4 h 52 min.
 
-Les mesures Bonsai et Qwen restent dans les répertoires locaux de leurs pilotes pour la traçabilité. La comparaison Gold utilisera les benchmarks complets validés de Gemma et Ministral.
+Les mesures Bonsai et Qwen restent dans les répertoires locaux de leurs pilotes pour la traçabilité. La comparaison Gold sera calculée à partir de l’OBT Silver, alimentée par les benchmarks complets validés de Gemma et Ministral.
 
 ## Benchmark complet Ministral du lot 4
 
@@ -373,3 +375,11 @@ L’audit confirme 15 870 identifiants d’inférence distincts, l’ordre com
 ## Clôture du lot 4
 
 L’utilisatrice a validé définitivement le benchmark Ministral et le comparatif avec Gemma. Les 13 échecs de transport restent archivés dans la table `echecs_transport_reprise` du journal DuckDB. Les phases dbt et Gold sont hors de cette clôture. [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
+
+## Consolidation Silver validée
+
+Les sources disponibles sont les sept Parquet validés du Silver préparé. Le corpus OpenTDB contient 5 290 lignes et 10 colonnes. Les six Parquet des benchmarks Gemma et Ministral contiennent chacun 5 290 réponses pour une combinaison modèle–prompt. Le Bronze OpenTDB et LLM reste intact. [Chemins des sept sources](ARCHITECTURE.md#sources-du-silver-préparé)
+
+La décision est de construire l’OBT dans DuckDB avec dbt. `staging` lira et typera les sources. `intermediate` réunira les six benchmarks par `UNION ALL`, puis joindra le corpus sur `question_id`. La cible est de 31 740 lignes, une par combinaison question × modèle × prompt, soit six inférences pour chacune des 5 290 questions distinctes. Les identifiants source, les scores stricts, les statuts et les latences seront conservés. Le périmètre garde les réponses hors format et exclut les pilotes Bonsai et Qwen ainsi que les 13 échecs archivés. [Granularité, justification et traçabilité](ARCHITECTURE.md#one-big-table-du-silver-consolidé)
+
+L’OBT et les modèles dbt restent à construire. Les jeux analytiques et agrégations Gold seront produits dans `marts` à partir de l’OBT, puis consommés par Streamlit. [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)

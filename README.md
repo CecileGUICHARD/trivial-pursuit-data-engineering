@@ -4,7 +4,18 @@ Projet du cours D42, ETL et optimisation des architectures de stockage, en M1 Bi
 
 Le projet construit un pipeline reproductible et traçable pour collecter des questions de culture générale, préparer les données et comparer des modèles de langage exécutés localement. Le benchmark sert de cas d’usage pour démontrer la maîtrise de la collecte, des contrôles qualité, de la transformation, de la modélisation, du stockage, de l’automatisation et de la restitution.
 
-Les livrables attendus sont le dépôt GitHub, une application Streamlit et une présentation orale. Le [suivi d’avancement](documentation/CURRENT.md) précise les étapes réalisées et les prochaines étapes.
+Les livrables attendus sont le dépôt GitHub, une application Streamlit et une présentation orale. [Suivi d’avancement](documentation/CURRENT.md) · [Registre des décisions](documentation/DECISIONS.md)
+
+## Architecture des données
+
+| Couche | Rôle et état |
+| --- | --- |
+| Bronze | Données brutes OpenTDB et LLM conservées intactes. |
+| Silver préparé | Sept Parquet validés. Le corpus OpenTDB contient 5 290 lignes × 10 colonnes. Les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct fournissent un Parquet de 5 290 réponses par modèle et par prompt P1, P2 et P3. |
+| Silver consolidé | One Big Table (OBT) validée comme cible et à construire dans DuckDB avec dbt. `staging` lira et typera les sources. `intermediate` appliquera un `UNION ALL` des six benchmarks, puis un `JOIN` au corpus sur `question_id`. |
+| Gold | Jeux analytiques et agrégations issus de l’OBT, à produire dans `marts` pour Streamlit. |
+
+L’OBT aura une ligne par question × modèle × prompt, soit **31 740 lignes attendues pour 5 290 questions distinctes**, à partir des inférences déjà réalisées. L’identifiant de question permet les comparaisons appariées. Les identifiants source, les scores stricts, les statuts et les latences seront conservés, y compris pour les réponses hors format. Les pilotes Bonsai et Qwen et les échecs de transport archivés restent hors de ce périmètre. [Sources Silver et décision de consolidation](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
 
 ## Jeux de données disponibles sur GitHub
 
@@ -33,7 +44,7 @@ Télécharger les fichiers ci-dessous depuis GitHub pour les utiliser directemen
 
 Les trois CSV de qualité utilisent le point-virgule comme séparateur. Le diagnostic et son classement documentent les propositions. Le rapport définitif indique celles qui ont été appliquées.
 
-Les fichiers du pilote et du benchmark Gemma sont répartis entre les mesures brutes de Bronze et les résultats structurés de Silver. Les journaux DuckDB de reprise, le manifeste d’exécution du lot 4, l’essai historique, les copies du candidat final et les fichiers temporaires sont locaux.
+Les exports complets du lot 4 pour Gemma P3 et pour les trois prompts Ministral sont disponibles localement. Les journaux DuckDB de reprise, le manifeste d’exécution du lot 4, l’essai historique, les copies du candidat final et les fichiers temporaires sont également locaux. [Chemins des sources Silver validées](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
 
 ## Source des données
 
@@ -92,7 +103,7 @@ python preparer_silver.py finaliser
 
 La commande reproduit le Parquet candidat et le rapport qualité dans `data/silver/candidat_final_5290/`. Les dix couples identifiant–libellé sont vérifiés avant exclusion. `python preparer_silver.py controler-doublons` contrôle en lecture seule le corpus courant `data/silver/questions_clean.parquet`. [Révision du Silver](documentation/CURRENT.md#révision-du-silver-après-les-cinq-arbitrages)
 
-### Pilote après validation
+### Protocole historique du pilote Gemma
 
 La commande historique `preparer_silver.py pilote` reste suspendue. Les deux fichiers suivants proviennent de l’essai antérieur à la finalisation.
 
@@ -117,11 +128,11 @@ python pilote_gemma.py executer --lm-studio-version '0.4.28+2' \
   --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1'
 ```
 
-Adapter les versions à l’installation utilisée. Avec le serveur Windows et le client WSL, ajouter `--curl /mnt/c/Windows/System32/curl.exe` si le port est accessible côté Windows uniquement. La reprise réutilise le journal local et la même configuration. Chaque export périodique enregistre d’abord le Bronze, puis produit le Silver correspondant. L’accord de l’utilisatrice est requis avant le benchmark complet ou le choix d’un deuxième modèle. [Protocole détaillé](documentation/ARCHITECTURE.md#benchmark)
+Adapter les versions à l’installation utilisée. Avec le serveur Windows et le client WSL, ajouter `--curl /mnt/c/Windows/System32/curl.exe` si le port est accessible côté Windows uniquement. La reprise réutilise le journal local et la même configuration. Chaque export périodique enregistre d’abord le Bronze, puis produit le Silver correspondant. Le lot 4 et le choix de Ministral comme deuxième modèle ont été validés. [Protocole détaillé](documentation/ARCHITECTURE.md#benchmark) · [Clôture du lot 4](documentation/CURRENT.md#clôture-du-lot-4)
 
 ### Benchmark complet Gemma du lot 4
 
-Le benchmark complet de Gemma 4 E2B couvre les **5 290 mêmes questions pour chacun des trois prompts**. Chaque prompt réutilise 530 mesures du pilote et ajoute 4 760 nouvelles mesures. Les Parquet sont directement exploitables avec DuckDB. Les tables Silver se joignent à `questions_clean.parquet` par `question_id`.
+Le benchmark complet de Gemma 4 E2B couvre les **5 290 mêmes questions pour chacun des trois prompts**. Chaque prompt réutilise 530 mesures du pilote et ajoute 4 760 nouvelles mesures. Les Parquet Silver sont lisibles dans DuckDB et font partie des sources validées de la future OBT. [Comparatif Gemma–Ministral](documentation/CURRENT.md#comparaison-avec-gemma)
 
 | Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
 | --- | ---: | ---: | ---: |
@@ -171,7 +182,8 @@ Pour poursuivre avec la collecte complète, rester dans la même session de term
 
 ## Organisation du dépôt
 
-- `data/` accueille les couches Bronze, Silver et Gold.
-- `dbt/` accueille les modèles SQL et leurs tests. `app/` est réservé à la restitution Streamlit.
+- `data/` accueille les fichiers des couches métier Bronze, Silver et Gold.
+- `dbt/models/staging/` et `dbt/models/intermediate/` accueilleront les modèles de préparation et de consolidation Silver. `dbt/models/marts/` accueillera les modèles analytiques Gold. `dbt/tests/` est réservé aux tests dbt.
+- `app/` est réservé à la restitution Streamlit à partir de Gold.
 - La [référence technique](documentation/ARCHITECTURE.md) détaille les flux, les formats et le benchmark.
 - Les [consignes pour les agents IA](AGENTS.md) décrivent les règles de collaboration.

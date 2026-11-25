@@ -7,6 +7,7 @@ Le projet est un benchmark de LLM locaux pour le cours D42 du M1 Big Data & IA. 
 - Lire le [README](README.md) pour comprendre le projet et [CURRENT.md](documentation/CURRENT.md) au début de chaque session.
 - Vérifier les fichiers existants avant toute création ou modification. Consulter [ARCHITECTURE.md](documentation/ARCHITECTURE.md) avant tout changement technique ou structurel important.
 - Mettre à jour `CURRENT.md` après chaque tâche significative et `ARCHITECTURE.md` quand les choix techniques évoluent. Signaler toute contradiction entre le code et les documents.
+- Mettre à jour le [registre `DECISIONS.md`](documentation/DECISIONS.md) après chaque nouvel arbitrage validé. Si l’arbitrage fait évoluer un choix antérieur, conserver la notice d’origine et indiquer son statut ainsi que le lien vers la nouvelle décision.
 
 ## Développement et qualité
 
