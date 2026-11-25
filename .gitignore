@@ -59,3 +59,8 @@ __pycache__/
 *.tmp
 *.temp
 *.log
+
+# Artefacts locaux dbt
+/dbt/target/
+/dbt/logs/
+/dbt/.user.yml

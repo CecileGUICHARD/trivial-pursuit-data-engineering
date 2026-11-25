@@ -72,7 +72,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 - **Contexte.** La chaîne doit transformer des données locales en indicateurs SQL et les restituer dans un tableau de bord.
 - **Choix et justification.** Retenir DuckDB pour les lectures Parquet et les traitements SQL locaux, dbt pour organiser les transformations et Streamlit pour la restitution. La première architecture réserve les indicateurs à Gold. La lecture sélective des colonnes Parquet par DuckDB est documentée dès le jalon Bronze.
-- **Conséquences et limites.** DuckDB sert déjà aux contrôles et journaux du projet. La répartition future des modèles dbt entre préparation Silver et publication Gold est précisée par DEC-032. Aucun comparatif avec un autre moteur, orchestrateur SQL ou outil de restitution n’est consigné.
+- **Conséquences et limites.** DuckDB sert aux contrôles et journaux du projet ainsi qu’à la consolidation Silver. La répartition des modèles dbt entre préparation Silver et publication Gold est précisée par DEC-032. Aucun comparatif avec un autre moteur, orchestrateur SQL ou outil de restitution n’est consigné.
 - **Références.** Commits `cdb0286` et `cadb884`. [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
 
 ### DEC-004 · Conserver le Bronze brut et préparer le Silver en Parquet
@@ -340,8 +340,8 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 - **Contexte.** Les six exports complets validés de DEC-023 et le corpus OpenTDB sont disponibles séparément. Les comparaisons appariées et les agrégations réutilisent les mêmes jointures et le même grain.
 - **Choix et justification.** Faire lire et typer les sept Parquet par `staging`. Construire l’OBT en DuckDB via `intermediate`, avec `UNION ALL` des six benchmarks puis `JOIN` au corpus sur `question_id`. Garder une ligne par question × modèle × prompt. Conserver les identifiants réels, le scoring strict, les statuts et les latences pour permettre la traçabilité et des indicateurs cohérents.
-- **Conséquences et limites.** Le grain donne 31 740 lignes attendues pour 5 290 questions distinctes. Les attributs OpenTDB sont répétés six fois par question. Les réponses hors format restent incluses. Les pilotes Bonsai et Qwen et les échecs archivés restent hors du périmètre. Les marts dbt produiront les jeux Gold issus de l’OBT, puis Streamlit consommera ces jeux. La validation porte sur l’architecture cible. L’OBT reste à construire.
-- **Références.** [Décision validée et état](CURRENT.md#consolidation-silver-validée) · [Sources et granularité](ARCHITECTURE.md#sources-du-silver-préparé) · [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
+- **Conséquences et limites.** L’utilisatrice a validé l’OBT construite, avec 31 740 lignes, 22 colonnes et 27 tests dbt réussis. Les attributs OpenTDB se répètent six fois par question. Le choix de préserver toutes les informations distinctes conduit à fusionner uniquement `question_id`. Les réponses hors format restent incluses. Les pilotes Bonsai et Qwen et les échecs archivés restent hors du périmètre. Les marts dbt produiront les jeux Gold issus de l’OBT, puis Streamlit consommera ces jeux.
+- **Références.** [Décision validée](CURRENT.md#consolidation-silver-validée) · [Résultats de la construction](CURRENT.md#construction-et-contrôles-de-lobt-silver) · [Sources et granularité](ARCHITECTURE.md#sources-du-silver-préparé) · [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
 
 ### DEC-033 · Préciser le modèle relationnel et le dictionnaire Gold
 

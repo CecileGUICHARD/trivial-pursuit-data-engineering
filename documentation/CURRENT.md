@@ -2,7 +2,7 @@
 
 Mis à jour le 25 novembre 2026. Le lot 4 est définitivement clos. L’utilisatrice a validé les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct ainsi que leur comparaison sur les mêmes 5 290 questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`.
 
-La consolidation en One Big Table (OBT) Silver est validée et reste à construire. [Décision et état de mise en œuvre](#consolidation-silver-validée)
+L’utilisatrice a validé les étapes 5 à 7 et la One Big Table (OBT) Silver. [Construction et contrôles](#construction-et-contrôles-de-lobt-silver)
 
 ## Travail réalisé
 
@@ -382,4 +382,19 @@ Les sources disponibles sont les sept Parquet validés du Silver préparé. Le c
 
 La décision est de construire l’OBT dans DuckDB avec dbt. `staging` lira et typera les sources. `intermediate` réunira les six benchmarks par `UNION ALL`, puis joindra le corpus sur `question_id`. La cible est de 31 740 lignes, une par combinaison question × modèle × prompt, soit six inférences pour chacune des 5 290 questions distinctes. Les identifiants source, les scores stricts, les statuts et les latences seront conservés. Le périmètre garde les réponses hors format et exclut les pilotes Bonsai et Qwen ainsi que les 13 échecs archivés. [Granularité, justification et traçabilité](ARCHITECTURE.md#one-big-table-du-silver-consolidé)
 
-L’OBT et les modèles dbt restent à construire. Les jeux analytiques et agrégations Gold seront produits dans `marts` à partir de l’OBT, puis consommés par Streamlit. [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
+Les jeux analytiques et agrégations Gold seront produits dans `marts` à partir de l’OBT, puis consommés par Streamlit. [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
+
+## Construction et contrôles de l’OBT Silver
+
+Les étapes 5 à 7 ont produit `silver.obt_silver` dans la base locale `data/silver/obt_silver.duckdb`. `dbt build` a réussi avec dbt Core `1.12.7`, dbt-duckdb `1.11.1` et DuckDB `2.0.1` dans la `.venv` du projet. Le build a matérialisé 8 vues et 1 table et validé les 27 tests de données, sans avertissement ni erreur. [Procédure](../README.md#construire-et-documenter-lobt-silver)
+
+| Contrôle | Résultat |
+| --- | --- |
+| Volume et schéma | 31 740 lignes et 22 colonnes. Seul `question_id` est fusionné. |
+| Couverture | 5 290 questions distinctes, 6 inférences par question et 5 290 lignes dans chacune des 6 combinaisons modèle–prompt. |
+| Clés | 31 740 UUID d’inférence distincts, zéro doublon du triplet et zéro résultat orphelin. |
+| Concordance | Zéro écart de valeur ou de multiplicité entre les projections de l’OBT et les sept Parquet. Le scoring strict recalculé concorde avec les valeurs historiques. |
+| Réponses et `NULL` | 1 294 réponses hors format avec `ai_answer` à `NULL`, dont quatre réponses brutes vides. `error_type` et `error_message` sont conservés avec 31 740 valeurs `NULL` chacun. |
+| Intégrité des sources | Les SHA-256 des 85 fichiers Bronze et Silver préexistants concordent avant et après le build. |
+
+Le manifeste dbt confirme sept sources, sept vues de staging, une vue d’union et deux parents directs pour l’OBT. La documentation statique est générée dans `dbt/target/static_index.html`. Les résultats du build sont conservés localement dans `dbt/target/build_run_results.json`. [Dictionnaire, qualité et lignage](ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt)

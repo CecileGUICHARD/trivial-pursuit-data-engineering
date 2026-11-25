@@ -12,10 +12,10 @@ Les livrables attendus sont le dépôt GitHub, une application Streamlit et une 
 | --- | --- |
 | Bronze | Données brutes OpenTDB et LLM conservées intactes. |
 | Silver préparé | Sept Parquet validés. Le corpus OpenTDB contient 5 290 lignes × 10 colonnes. Les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct fournissent un Parquet de 5 290 réponses par modèle et par prompt P1, P2 et P3. |
-| Silver consolidé | One Big Table (OBT) validée comme cible et à construire dans DuckDB avec dbt. `staging` lira et typera les sources. `intermediate` appliquera un `UNION ALL` des six benchmarks, puis un `JOIN` au corpus sur `question_id`. |
+| Silver consolidé | La table `silver.obt_silver` est matérialisée dans DuckDB. `staging` lit les sept sources. `intermediate` applique un `UNION ALL BY NAME` des six benchmarks, puis un `JOIN` au corpus sur `question_id`. |
 | Gold | Jeux analytiques et agrégations issus de l’OBT, à produire dans `marts` pour Streamlit. |
 
-L’OBT aura une ligne par question × modèle × prompt, soit **31 740 lignes attendues pour 5 290 questions distinctes**, à partir des inférences déjà réalisées. L’identifiant de question permet les comparaisons appariées. Les identifiants source, les scores stricts, les statuts et les latences seront conservés, y compris pour les réponses hors format. Les pilotes Bonsai et Qwen et les échecs de transport archivés restent hors de ce périmètre. [Sources Silver et décision de consolidation](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
+L’OBT contient une ligne par question × modèle × prompt, soit **31 740 lignes, 22 colonnes et 5 290 questions distinctes**. L’identifiant de question permet les comparaisons appariées. Les identifiants source, les scores stricts, les statuts et les latences sont conservés, y compris pour les réponses hors format. Les pilotes Bonsai et Qwen et les échecs de transport archivés restent hors de ce périmètre. [Sources Silver et dictionnaire](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
 
 ## Jeux de données disponibles sur GitHub
 
@@ -63,6 +63,22 @@ python -m pip install requests pandas
 ```
 
 ## Utilisation
+
+### Construire et documenter l’OBT Silver
+
+Les sept Parquet validés doivent être présents aux chemins indiqués dans l’architecture, dont quatre fichiers locaux. Le profil dbt utilise des chemins relatifs à `dbt/`. Depuis la racine du dépôt, avec la `.venv` existante, installer les versions vérifiées et lancer les commandes ci-dessous. [Chemins des sept sources](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
+
+```bash
+.venv/bin/python -m pip install -r dbt/requirements.txt
+(
+  cd dbt &&
+  ../.venv/bin/dbt build --profiles-dir . &&
+  cp target/run_results.json target/build_run_results.json &&
+  ../.venv/bin/dbt docs generate --profiles-dir . --static
+)
+```
+
+Le build lit les Parquet et écrit les vues et la table `silver.obt_silver` dans la base locale `data/silver/obt_silver.duckdb`. Pour consulter le lignage, ouvrir `dbt/target/static_index.html` dans le navigateur, rechercher le modèle `obt_silver` et ouvrir **Lineage Graph**. La page montre aussi le catalogue des colonnes et les tests. Les fichiers générés sous `dbt/target/` restent locaux. [Documentation dbt](https://docs.getdbt.com/reference/commands/cmd-docs) · [Dictionnaire de l’OBT](documentation/ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt)
 
 ### Examiner la collecte existante
 
@@ -132,7 +148,7 @@ Adapter les versions à l’installation utilisée. Avec le serveur Windows et l
 
 ### Benchmark complet Gemma du lot 4
 
-Le benchmark complet de Gemma 4 E2B couvre les **5 290 mêmes questions pour chacun des trois prompts**. Chaque prompt réutilise 530 mesures du pilote et ajoute 4 760 nouvelles mesures. Les Parquet Silver sont lisibles dans DuckDB et font partie des sources validées de la future OBT. [Comparatif Gemma–Ministral](documentation/CURRENT.md#comparaison-avec-gemma)
+Le benchmark complet de Gemma 4 E2B couvre les **5 290 mêmes questions pour chacun des trois prompts**. Chaque prompt réutilise 530 mesures du pilote et ajoute 4 760 nouvelles mesures. Les Parquet Silver sont lisibles dans DuckDB et alimentent l’OBT. [Comparatif Gemma–Ministral](documentation/CURRENT.md#comparaison-avec-gemma)
 
 | Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
 | --- | ---: | ---: | ---: |
@@ -183,7 +199,7 @@ Pour poursuivre avec la collecte complète, rester dans la même session de term
 ## Organisation du dépôt
 
 - `data/` accueille les fichiers des couches métier Bronze, Silver et Gold.
-- `dbt/models/staging/` et `dbt/models/intermediate/` accueilleront les modèles de préparation et de consolidation Silver. `dbt/models/marts/` accueillera les modèles analytiques Gold. `dbt/tests/` est réservé aux tests dbt.
+- `dbt/models/staging/` et `dbt/models/intermediate/` contiennent les modèles de préparation et de consolidation Silver. `dbt/models/marts/` accueillera les modèles analytiques Gold. `dbt/tests/` contient les tests SQL de l’OBT.
 - `app/` est réservé à la restitution Streamlit à partir de Gold.
 - La [référence technique](documentation/ARCHITECTURE.md) détaille les flux, les formats et le benchmark.
 - Les [consignes pour les agents IA](AGENTS.md) décrivent les règles de collaboration.

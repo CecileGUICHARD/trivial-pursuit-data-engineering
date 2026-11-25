@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_opentdb
+    description: Vue du corpus final avec les types lus dans le Parquet.
+    columns:
+      - name: question_id
+        data_tests: [not_null, unique]
+      - name: type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [multiple, boolean]
+      - name: difficulty
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [easy, medium, hard]
+  - name: stg_gemma_p1
+    description: Vue du benchmark Gemma pour P1.
+  - name: stg_gemma_p2
+    description: Vue du benchmark Gemma pour P2.
+  - name: stg_gemma_p3
+    description: Vue du benchmark Gemma pour P3.
+  - name: stg_ministral_p1
+    description: Vue du benchmark Ministral pour P1.
+  - name: stg_ministral_p2
+    description: Vue du benchmark Ministral pour P2.
+  - name: stg_ministral_p3
+    description: Vue du benchmark Ministral pour P3.

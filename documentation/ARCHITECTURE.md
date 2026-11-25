@@ -1,6 +1,6 @@
 # Architecture technique
 
-L’architecture cible relie Open Trivia Database (OpenTDB) à un tableau de bord Streamlit. Le lot 4 a livré les fichiers Silver préparés. La One Big Table (OBT) Silver, les jeux Gold et l’application restent à construire. [Suivi opérationnel](CURRENT.md) · [Registre des décisions](DECISIONS.md)
+L’architecture cible relie Open Trivia Database (OpenTDB) à un tableau de bord Streamlit. Le lot 4 a livré les fichiers Silver préparés et les étapes 5 à 7 ont construit la One Big Table (OBT) Silver. Les jeux Gold et l’application restent à construire. [Suivi opérationnel](CURRENT.md) · [Registre des décisions](DECISIONS.md)
 
 ## Choix validés
 
@@ -23,7 +23,7 @@ flowchart LR
     Benchmark --> QuestionsStaging[dbt staging · corpus typé]
     Resultats --> ResultatsStaging[dbt staging · benchmarks typés]
     ResultatsStaging --> Union[dbt intermediate · UNION ALL des six benchmarks]
-    Union --> OBT[Silver consolidé · OBT dans DuckDB]
+    Union --> OBT[Silver consolidé · table silver.obt_silver dans DuckDB]
     QuestionsStaging -->|JOIN sur question_id| OBT
     OBT --> Gold[Gold · jeux analytiques et agrégations dans dbt marts]
     Gold --> App[Streamlit]
@@ -90,21 +90,60 @@ Le corpus OpenTDB final et les six résultats complets Gemma 4 E2B et Ministral 
 | Ministral P2 | `data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet` | 5 290 réponses | Local |
 | Ministral P3 | `data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet` | 5 290 réponses | Local |
 
-Les six exports complets incluent déjà les mesures Gemma et Ministral réutilisées lors de la reprise. Les fichiers de pilote séparés et les 13 échecs de transport de la table `echecs_transport_reprise` relèvent de la traçabilité. Les pilotes Bonsai et Qwen sont hors du périmètre de l’OBT et des agrégations Gold. Les réponses reçues hors format restent parmi les résultats à consolider et comptent comme incorrectes au scoring strict. [Arbitrage du deuxième modèle](CURRENT.md#choix-définitif-du-deuxième-modèle) · [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
+Les six exports complets incluent déjà les mesures Gemma et Ministral réutilisées lors de la reprise. Les fichiers de pilote séparés et les 13 échecs de transport de la table `echecs_transport_reprise` relèvent de la traçabilité. Les pilotes Bonsai et Qwen sont hors du périmètre de l’OBT et des agrégations Gold. Les réponses reçues hors format sont présentes dans l’OBT et comptent comme incorrectes au scoring strict. [Arbitrage du deuxième modèle](CURRENT.md#choix-définitif-du-deuxième-modèle) · [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
 
 ### One Big Table du Silver consolidé
 
-L’OBT est validée comme cible et reste à construire dans DuckDB avec dbt. `staging` lira et typera les sept Parquet. Dans `intermediate`, un `UNION ALL` réunira les six résultats de benchmark, puis un `JOIN` sur `question_id` rattachera chaque ligne à sa question OpenTDB.
+La table `silver.obt_silver` est matérialisée dans la base DuckDB locale `data/silver/obt_silver.duckdb`. Sept vues de `staging` lisent les Parquet déclarés avec `source()`. DuckDB reprend leurs types natifs. La vue `int_benchmark_results` réunit les six vues de benchmark avec `UNION ALL BY NAME`, qui préserve une éventuelle colonne propre à une source et place `NULL` dans les branches où elle est absente. L’OBT référence cette vue et `stg_opentdb` avec `ref()` et fait une jointure interne sur `question_id`. Une seule colonne représente la clé vérifiée commune aux deux côtés. Le schéma observé présente zéro autre collision de noms. [Sources dbt](../dbt/models/staging/sources.yml) · [Modèle de l’OBT](../dbt/models/intermediate/obt_silver.sql)
 
-La granularité est une ligne par triplet (`question_id`, `model_id`, `prompt_id`), soit **31 740 lignes attendues** pour **5 290 questions distinctes**, à raison de six inférences par question. La table conservera les identifiants source, dont `inference_id`, ainsi que les réponses brutes, les résultats du scoring strict (`ai_answer`, `ai_correct`, `format_valid`), le statut (`status`) et la latence HTTP en secondes (`response_time`).
+La granularité est une ligne par triplet (`question_id`, `model_id`, `prompt_id`). La construction a produit **31 740 lignes et 22 colonnes**, avec six inférences pour chacune des 5 290 questions distinctes. Les identifiants source, les réponses brutes, le scoring strict, les statuts, les latences et les métadonnées techniques sont repris à l’identique.
 
 Une granularité commune permet d’apparier les mesures par `question_id` pour comparer les modèles à prompt fixé ou les prompts à modèle fixé. Centraliser l’union et la jointure dans dbt permet de reproduire la consolidation à partir des mêmes sources validées et de rattacher chaque résultat à l’inférence d’origine. Les indicateurs Gold appliqueront les mêmes définitions de l’exactitude stricte, de la conformité et des latences à un périmètre commun de réponses reçues. [Définitions des mesures](#benchmark)
 
-La dénormalisation répétera les attributs OpenTDB, comme le libellé, la catégorie et la difficulté, sur six lignes par question. Ce coût de stockage permet aux analyses de réutiliser la jointure préparée. Au niveau de l’OBT, `COUNT(*)` compte les inférences dans le périmètre filtré et `COUNT(DISTINCT question_id)` compte les questions couvertes.
+La dénormalisation répète les attributs OpenTDB, comme le libellé, la catégorie et la difficulté, sur six lignes par question. Ce coût de stockage permet aux analyses de réutiliser la jointure préparée. Au niveau de l’OBT, `COUNT(*)` compte les inférences dans le périmètre filtré et `COUNT(DISTINCT question_id)` compte les questions couvertes.
+
+#### Dictionnaire des colonnes de l’OBT
+
+La provenance « Benchmarks » désigne `int_benchmark_results`, issu des six exports Silver. « OpenTDB » désigne `stg_opentdb`, issu de `questions_clean.parquet`. Les six Parquet de benchmark ont les mêmes 13 colonnes et les mêmes types. Le Parquet OpenTDB compte 10 colonnes. Les 22 noms d’origine sont conservés, avec fusion de la seule clé `question_id` et zéro renommage.
+
+| Colonne | Type DuckDB | Description | Origine et renommage |
+| --- | --- | --- | --- |
+| `question_id` | `VARCHAR` | Identifiant stable SHA-256 de la question. | Benchmarks et OpenTDB · clé fusionnée, nom d’origine |
+| `model_id` | `VARCHAR` | Identifiant réel du modèle renvoyé par LM Studio. | Benchmarks |
+| `prompt_id` | `VARCHAR` | Identifiant du gabarit P1, P2 ou P3. | Benchmarks |
+| `inference_id` | `UUID` | Identifiant unique de l’inférence d’origine. | Benchmarks |
+| `raw_response` | `VARCHAR` | Réponse brute, y compris texte hors format et chaîne vide. | Benchmarks |
+| `ai_answer` | `VARCHAR` | Réponse extraite au scoring si le format est conforme. `NULL` sinon. | Benchmarks |
+| `ai_correct` | `BOOLEAN` | Résultat historique de l’évaluation stricte. | Benchmarks |
+| `response_time` | `DOUBLE` | Latence HTTP historique en secondes jusqu’à réception complète. | Benchmarks |
+| `format_valid` | `BOOLEAN` | Conformité historique au format de réponse demandé. | Benchmarks |
+| `status` | `VARCHAR` | Statut d’origine de la tentative. Les exports définitifs contiennent `received`. | Benchmarks |
+| `configuration` | `VARCHAR` | JSON textuel d’origine avec réglages, versions et empreintes. | Benchmarks |
+| `error_type` | `VARCHAR` | Type d’erreur technique consigné. Valeurs `NULL` dans ces exports. | Benchmarks |
+| `error_message` | `VARCHAR` | Diagnostic technique consigné. Valeurs `NULL` dans ces exports. | Benchmarks |
+| `type` | `VARCHAR` | Type OpenTDB `multiple` ou `boolean`. | OpenTDB |
+| `difficulty` | `VARCHAR` | Difficulté OpenTDB `easy`, `medium` ou `hard`. | OpenTDB |
+| `category` | `VARCHAR` | Libellé de la catégorie OpenTDB. | OpenTDB |
+| `question` | `VARCHAR` | Libellé anglais préparé pour le benchmark. | OpenTDB |
+| `correct_answer` | `VARCHAR` | Texte de la bonne réponse de référence. | OpenTDB |
+| `incorrect_answers` | `VARCHAR[]` | Liste des distracteurs dans l’ordre source Silver. | OpenTDB |
+| `answer_choices` | `VARCHAR[]` | Liste des choix dans l’ordre de présentation figé. | OpenTDB |
+| `expected_answer` | `VARCHAR` | Référence de scoring, lettre A à D ou `True` ou `False`. | OpenTDB |
+| `category_id` | `INTEGER` | Identifiant officiel de la catégorie OpenTDB. | OpenTDB |
+
+Les scores `ai_correct` et `format_valid` sont recalculables, `category` correspond à un `category_id`, et les deux champs d’erreur sont actuellement entièrement nuls. Ce sont des candidats à un arbitrage de simplification. Les champs restent utiles pour conserver la trace originale du scoring, la lisibilité des catégories et le schéma d’audit. `raw_response` et `ai_answer` portent le texte intégral et l’extraction respectivement. `correct_answer`, `expected_answer` et `answer_choices` portent le texte, le code attendu et l’ordre de présentation. Le modèle conserve l’ensemble de ces champs.
+
+#### Qualité et lignage dbt
+
+Les tests vérifient les effectifs globaux, les six combinaisons modèle–prompt, la couverture par question, l’unicité du triplet et des UUID, les clés obligatoires et les domaines autorisés. Le test de relation en amont vérifie la présence de chaque `question_id` de benchmark dans le corpus. Le contrôle de schéma compare les noms et les types de l’OBT aux vues sources après fusion de la clé.
+
+Deux tests comparent directement aux Parquet les 13 colonnes de benchmark et les 10 colonnes du corpus, répliquées six fois dans le second cas. Les `EXCEPT ALL` dans les deux sens comparent les valeurs et leur multiplicité, y compris les `NULL`, les listes et leur ordre. Le test de scoring recalcule la conformité et l’exactitude pour comparaison avec les valeurs historiques. [Tests SQL](../dbt/tests/) · [Bilan d’exécution](CURRENT.md#construction-et-contrôles-de-lobt-silver)
+
+La documentation dbt générée expose le graphe des sept sources, des sept vues de staging, de la vue d’union et de l’OBT. Pour ouvrir le graphe, charger `dbt/target/static_index.html` dans un navigateur local, sélectionner `obt_silver` puis ouvrir **Lineage Graph**. [Procédure reproductible](../README.md#construire-et-documenter-lobt-silver)
 
 ### Gold et restitution
 
-Les couches métier Bronze, Silver et Gold décrivent l’état et l’usage des données. Les dossiers dbt décrivent les étapes de transformation. `dbt/models/staging/` et `dbt/models/intermediate/` serviront à préparer et à consolider Silver dans DuckDB. `dbt/models/marts/` produira les jeux analytiques et les agrégations Gold à partir de l’OBT Silver. Streamlit consommera les résultats Gold.
+Les couches métier Bronze, Silver et Gold décrivent l’état et l’usage des données. Les dossiers dbt décrivent les étapes de transformation. `dbt/models/staging/` et `dbt/models/intermediate/` préparent et consolident Silver dans DuckDB. `dbt/models/marts/` produira les jeux analytiques et les agrégations Gold à partir de l’OBT Silver. Streamlit consommera les résultats Gold.
 
 ### Benchmark
 

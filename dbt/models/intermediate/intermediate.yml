@@ -1,0 +1,103 @@
+version: 2
+
+models:
+  - name: int_benchmark_results
+    description: Union par nom des six benchmarks validés. Les éventuelles colonnes propres à une branche sont nulles dans les autres.
+    columns:
+      - name: question_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_opentdb')
+                field: question_id
+  - name: obt_silver
+    description: Table Silver consolidée au grain question × modèle × prompt, avec les mesures d’origine.
+    columns:
+      - name: question_id
+        data_type: varchar
+        description: Identifiant stable commun au corpus et aux benchmarks.
+        data_tests: [not_null]
+      - name: model_id
+        data_type: varchar
+        description: Identifiant du modèle consigné par LM Studio.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['google/gemma-4-e2b', 'mistralai/ministral-3-3b']
+      - name: prompt_id
+        data_type: varchar
+        description: Identifiant du gabarit envoyé au modèle.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [P1_choices, P2_expert, P3_expert_advanced]
+      - name: inference_id
+        data_type: uuid
+        description: UUID de la tentative d’origine.
+        data_tests: [not_null, unique]
+      - name: raw_response
+        data_type: varchar
+        description: Réponse brute, sorties hors format et chaînes vides comprises.
+        data_tests: [not_null]
+      - name: ai_answer
+        data_type: varchar
+        description: Réponse extraite si le format est conforme, sinon NULL.
+      - name: ai_correct
+        data_type: boolean
+        description: Résultat historique du scoring strict.
+        data_tests: [not_null]
+      - name: response_time
+        data_type: double
+        description: Latence HTTP historique en secondes.
+        data_tests: [not_null]
+      - name: format_valid
+        data_type: boolean
+        description: Conformité historique de la réponse au format demandé.
+        data_tests: [not_null]
+      - name: status
+        data_type: varchar
+        description: Statut d’origine de la tentative exportée.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [received]
+      - name: configuration
+        data_type: varchar
+        description: JSON d’origine avec paramètres, versions et empreintes.
+      - name: error_type
+        data_type: varchar
+        description: Type d’erreur technique d’origine, NULL en l’absence d’erreur.
+      - name: error_message
+        data_type: varchar
+        description: Diagnostic technique d’origine, NULL en l’absence d’erreur.
+      - name: type
+        data_type: varchar
+        description: Type OpenTDB, QCM ou vrai/faux.
+      - name: difficulty
+        data_type: varchar
+        description: Niveau de difficulté OpenTDB.
+      - name: category
+        data_type: varchar
+        description: Libellé de la catégorie OpenTDB.
+      - name: question
+        data_type: varchar
+        description: Libellé anglais de la question préparée.
+      - name: correct_answer
+        data_type: varchar
+        description: Texte de la bonne réponse de référence.
+      - name: incorrect_answers
+        data_type: varchar[]
+        description: Liste des distracteurs dans l’ordre Silver.
+      - name: answer_choices
+        data_type: varchar[]
+        description: Liste des choix dans l’ordre de présentation figé.
+      - name: expected_answer
+        data_type: varchar
+        description: Valeur de référence utilisée par le scoring strict.
+      - name: category_id
+        data_type: integer
+        description: Identifiant officiel de la catégorie OpenTDB.

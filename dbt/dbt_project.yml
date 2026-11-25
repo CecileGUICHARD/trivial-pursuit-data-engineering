@@ -1,0 +1,15 @@
+name: trivial_pursuit
+version: '1.0.0'
+config-version: 2
+profile: trivial_pursuit
+
+model-paths: [models]
+test-paths: [tests]
+clean-targets: [target]
+
+flags:
+  send_anonymous_usage_stats: false
+
+models:
+  trivial_pursuit:
+    +materialized: view

@@ -1,0 +1,8 @@
+trivial_pursuit:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: ../data/silver/obt_silver.duckdb
+      schema: silver
+      threads: 4

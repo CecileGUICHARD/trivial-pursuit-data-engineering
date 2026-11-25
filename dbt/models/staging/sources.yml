@@ -1,0 +1,77 @@
+version: 2
+
+sources:
+  - name: silver_inputs
+    description: Sept Parquet validés du Silver préparé, lus en place par DuckDB.
+    tables:
+      - name: opentdb
+        description: Corpus OpenTDB définitif de 5 290 questions.
+        config:
+          meta:
+            external_location: ../data/silver/questions_clean.parquet
+        columns:
+          - {name: type, data_type: varchar}
+          - {name: difficulty, data_type: varchar}
+          - {name: category, data_type: varchar}
+          - {name: question, data_type: varchar}
+          - {name: correct_answer, data_type: varchar}
+          - {name: incorrect_answers, data_type: 'varchar[]'}
+          - {name: question_id, data_type: varchar}
+          - {name: answer_choices, data_type: 'varchar[]'}
+          - {name: expected_answer, data_type: varchar}
+          - {name: category_id, data_type: integer}
+
+      - name: gemma_p1_choices
+        description: Gemma 4 E2B, P1_choices.
+        config:
+          meta:
+            external_location: ../data/silver/benchmark_lot4/gemma_p1_choices.parquet
+        columns: &benchmark_columns
+          - {name: question_id, data_type: varchar}
+          - {name: model_id, data_type: varchar}
+          - {name: prompt_id, data_type: varchar}
+          - {name: inference_id, data_type: uuid}
+          - {name: raw_response, data_type: varchar}
+          - {name: ai_answer, data_type: varchar}
+          - {name: ai_correct, data_type: boolean}
+          - {name: response_time, data_type: double}
+          - {name: format_valid, data_type: boolean}
+          - {name: status, data_type: varchar}
+          - {name: configuration, data_type: varchar}
+          - {name: error_type, data_type: varchar}
+          - {name: error_message, data_type: varchar}
+
+      - name: gemma_p2_expert
+        description: Gemma 4 E2B, P2_expert.
+        config:
+          meta:
+            external_location: ../data/silver/benchmark_lot4/gemma_p2_expert.parquet
+        columns: *benchmark_columns
+
+      - name: gemma_p3_expert_advanced
+        description: Gemma 4 E2B, P3_expert_advanced.
+        config:
+          meta:
+            external_location: ../data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet
+        columns: *benchmark_columns
+
+      - name: ministral_p1_choices
+        description: Ministral 3 3B Instruct, P1_choices.
+        config:
+          meta:
+            external_location: ../data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet
+        columns: *benchmark_columns
+
+      - name: ministral_p2_expert
+        description: Ministral 3 3B Instruct, P2_expert.
+        config:
+          meta:
+            external_location: ../data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet
+        columns: *benchmark_columns
+
+      - name: ministral_p3_expert_advanced
+        description: Ministral 3 3B Instruct, P3_expert_advanced.
+        config:
+          meta:
+            external_location: ../data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet
+        columns: *benchmark_columns
