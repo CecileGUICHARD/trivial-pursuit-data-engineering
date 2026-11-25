@@ -1,6 +1,6 @@
 # État d’avancement
 
-Mis à jour le 25 novembre 2026. L’utilisatrice a validé définitivement le benchmark Gemma 4 E2B sur les 5 290 mêmes questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`. Les 15 870 mesures comprennent les 1 590 inférences des pilotes. Le benchmark Gemma est clos.
+Mis à jour le 25 novembre 2026. Le lot 4 est définitivement clos. L’utilisatrice a validé les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct ainsi que leur comparaison sur les mêmes 5 290 questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`.
 
 ## Travail réalisé
 
@@ -334,6 +334,42 @@ Le 25 novembre 2026, l’utilisatrice a validé le pilote et retenu **Ministral-
 
 Les mesures Bonsai et Qwen restent dans les répertoires locaux de leurs pilotes pour la traçabilité. La comparaison Gold utilisera les benchmarks complets validés de Gemma et Ministral.
 
-## Prochain jalon
+## Benchmark complet Ministral du lot 4
 
-L’utilisatrice a autorisé le benchmark complet de Ministral avec reprise des 90 mesures du pilote. Les modèles dbt, les indicateurs Gold et l’application Streamlit restent à traiter.
+Le 25 novembre 2026, le benchmark Ministral a démarré avec les 90 tentatives du pilote, à raison de 30 par prompt. Le plan comporte 5 260 nouvelles tentatives par prompt, soit 15 780 au total, dans l’ordre du manifeste du benchmark Gemma. Le contrôle au démarrage a retrouvé la configuration du pilote, y compris les empreintes des trois prompts. [Protocole et chemins de reprise](ARCHITECTURE.md#benchmark-complet-ministral-du-lot-4)
+
+À 03 h 41, le client HTTP Windows a interrompu P3 après 3 159 réponses reçues, pilote compris. P1 et P2 étaient complets. Le journal LM Studio a compté 13 649 nouvelles réponses et trois échauffements avant l’arrêt. Les 13 échecs de transport qui suivent la dernière réponse ont été isolés pour permettre la reprise des positions sans requête reçue par LM Studio.
+
+Le benchmark complet compte **15 870 réponses reçues**, dont 90 reprises du pilote. Les 15 780 nouvelles inférences couvrent exactement les 5 260 positions restantes de chacun des trois prompts.
+
+| Mesure Ministral | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
+| --- | ---: | ---: | ---: |
+| Réponses reçues | 5 290 | 5 290 | 5 290 |
+| Bonnes réponses | 2 844 | 2 779 | 2 182 |
+| Mauvaises réponses | 2 446 | 2 511 | 3 108 |
+| Exactitude stricte | 53,76 % | 52,53 % | 41,25 % |
+| Conformité | 5 278 (99,77 %) | 5 187 (98,05 %) | 4 166 (78,75 %) |
+| Échecs de transport archivés | 0 | 0 | 13 |
+| Positions sans réponse à la clôture | 0 | 0 | 0 |
+| Latence HTTP moyenne | 0,736 s | 0,733 s | 1,092 s |
+| Latence HTTP médiane | 0,711 s | 0,706 s | 0,753 s |
+| Durée active du complément | 1 h 14 min 50 s | 1 h 14 min 43 s | 1 h 46 min 32 s |
+| Durée active avec le pilote | 1 h 15 min 16 s | 1 h 15 min 10 s | 1 h 47 min 19 s |
+
+P3 compte **1 124 sorties hors format**, dont 793 QCM et 331 vrai/faux. Le scoring strict les compte comme incorrectes. Les 13 échecs de transport P3 restent archivés dans `echecs_transport_reprise` avec leurs identifiants. LM Studio a confirmé que les 13 requêtes concernées n’avaient pas été reçues. La reprise a terminé les 2 131 positions P3 restantes avec Vulkan 2.80.1 et la configuration du pilote.
+
+Le complément a pris **4 h 16 min 05 s** de temps actif. Avec les pilotes, le total est de **4 h 17 min 45 s** pour Ministral et **2 h 37 min 05 s** pour Gemma. Le temps actif inclut les écritures et exclut les échauffements, le chargement et la pause entre les deux segments de P3.
+
+### Comparaison avec Gemma
+
+| Prompt | Exactitude Gemma / Ministral | Conformité Gemma / Ministral | Latence moyenne Gemma / Ministral | Gemma seul correct / Ministral seul correct |
+| --- | ---: | ---: | ---: | ---: |
+| P1 | 54,12 % / 53,76 % | 100,00 % / 99,77 % | 0,463 / 0,736 s | 831 / 812 |
+| P2 | 53,91 % / 52,53 % | 100,00 % / 98,05 % | 0,466 / 0,733 s | 884 / 811 |
+| P3 | 52,04 % / 41,25 % | 98,96 % / 78,75 % | 0,522 / 1,092 s | 1 239 / 668 |
+
+L’audit confirme 15 870 identifiants d’inférence distincts, l’ordre commun, l’identité des 90 mesures Pilote–Bronze–Silver, la concordance du journal et des Parquet et le scoring recalculé. Les 13 739 réponses présentes avant la reprise concordent champ par champ. L’audit LM Studio retrouve 15 784 appels, dont quatre échauffements, avec un seul message, `store=false` et sans référence à une réponse précédente. Les empreintes des 64 fichiers historiques Bronze et Silver contrôlés avant la reprise concordent. [Bronze](../data/bronze/benchmark_ministral_lot4/) · [Silver](../data/silver/benchmark_ministral_lot4/) · [Journal DuckDB](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
+
+## Clôture du lot 4
+
+L’utilisatrice a validé définitivement le benchmark Ministral et le comparatif avec Gemma. Les 13 échecs de transport restent archivés dans la table `echecs_transport_reprise` du journal DuckDB. Les phases dbt et Gold sont hors de cette clôture. [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)

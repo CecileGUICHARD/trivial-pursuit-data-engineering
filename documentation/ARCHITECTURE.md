@@ -170,6 +170,16 @@ Le moteur a initialisé quatre créneaux de 4 096 tokens. Il a désactivé Fla
 
 Le journal DuckDB du pilote et les relevés mémoire Windows sont dans `data/silver/pilote_ministral/`. Chaque couche conserve un Parquet `ministral_*.parquet` par prompt. `pilote_ministral.py bilan` relit le journal et projette le temps actif par prompt sur 5 290 questions depuis zéro ou 5 260 après reprise du pilote. Chaque projection inclut la persistance des résultats. Le chargement et les échauffements ont lieu hors temps actif. [Résultats et comparatif](CURRENT.md#test-de-faisabilité-ministral-3-3b-instruct-2512)
 
+### Benchmark complet Ministral du lot 4
+
+`benchmark_ministral.py executer` réutilise le manifeste complet de Gemma. Ses 30 premiers rangs correspondent au manifeste commun des pilotes de faisabilité. Le script copie les 90 tentatives et les trois segments du pilote dans le journal local du benchmark. Seule l’empreinte du manifeste change dans la configuration de reprise. Les configurations et résultats historiques sont conservés sur chaque tentative.
+
+Avant chaque exécution ou reprise, le script compare la configuration de l’instance chargée, le moteur, les paramètres de génération et les empreintes des trois gabarits avec le journal du pilote. Le pipeline commun journalise chaque tentative dans DuckDB et exporte Bronze puis Silver toutes les 25 nouvelles tentatives et à la fin de chaque bloc. La reprise saute les `question_id` déjà journalisés pour le prompt, y compris les réponses hors format. [Script du benchmark](../benchmark_ministral.py)
+
+Après l’interruption du client HTTP sur P3, le rapprochement avec les journaux LM Studio a confirmé que 13 tentatives sans réponse étaient restées côté client. Une transaction a archivé ces 13 lignes dans `echecs_transport_reprise` et libéré leurs positions pour le segment suivant. Les 13 739 réponses déjà reçues et leurs identifiants ont été repris. Le moteur Vulkan 2.80.1 a été resélectionné avant le rechargement de l’instance.
+
+Les exports et le journal restent locaux sous `data/bronze/benchmark_ministral_lot4/` et `data/silver/benchmark_ministral_lot4/`. `benchmark_ministral.py bilan` relit les deux benchmarks et compare les réponses par `question_id` pour chaque prompt. [Suivi du benchmark](CURRENT.md#benchmark-complet-ministral-du-lot-4)
+
 ## Choix à arbitrer
 
 - Modèle relationnel détaillé et dictionnaire des données Gold.
