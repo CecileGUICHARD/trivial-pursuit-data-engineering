@@ -1,0 +1,123 @@
+version: 2
+
+models:
+  - name: mart_performance
+    description: Résultats stricts par modèle et prompt, avec trois statuts exclusifs, conformité et latence moyenne.
+    data_tests:
+      - gold_grain:
+          arguments: {keys: [model_id, prompt_id], row_count: 6}
+    columns:
+      - {name: model_id, description: Identifiant du modèle.}
+      - {name: prompt_id, description: Identifiant du prompt.}
+      - {name: response_count, description: Nombre de réponses reçues dans le groupe.}
+      - {name: correct_count, description: Nombre de réponses strictement correctes.}
+      - {name: correct_pct, description: Pourcentage de réponses strictement correctes.}
+      - {name: incorrect_conforming_count, description: Nombre de réponses conformes et incorrectes.}
+      - {name: incorrect_conforming_pct, description: Pourcentage de réponses conformes et incorrectes.}
+      - {name: out_of_format_count, description: Nombre de réponses hors format.}
+      - {name: out_of_format_pct, description: Pourcentage de réponses hors format.}
+      - {name: compliance_pct, description: Pourcentage de réponses conformes.}
+      - {name: avg_response_time_s, description: Moyenne des latences HTTP en secondes.}
+
+  - name: mart_prompt_comparison
+    description: Comparaisons orientées entre les trois prompts sur les mêmes questions et le même modèle.
+    data_tests:
+      - gold_grain:
+          arguments: {keys: [model_id, prompt_from, prompt_to], row_count: 6}
+    columns:
+      - {name: model_id, description: Identifiant du modèle.}
+      - {name: prompt_from, description: Prompt de référence dans la comparaison.}
+      - {name: prompt_to, description: Prompt comparé à la référence.}
+      - {name: pair_count, description: Nombre de questions appariées.}
+      - {name: gain_count, description: Questions qui passent d’incorrectes à correctes.}
+      - {name: loss_count, description: Questions qui passent de correctes à incorrectes.}
+      - {name: both_correct_count, description: Questions correctes avec les deux prompts.}
+      - {name: both_incorrect_count, description: Questions incorrectes avec les deux prompts.}
+      - {name: success_from_pct, description: Réussite du prompt de référence en pourcentage.}
+      - {name: success_to_pct, description: Réussite du prompt comparé en pourcentage.}
+      - {name: success_delta_pp, description: Écart de réussite comparé moins référence en points de pourcentage.}
+      - {name: compliance_from_pct, description: Conformité du prompt de référence en pourcentage.}
+      - {name: compliance_to_pct, description: Conformité du prompt comparé en pourcentage.}
+      - {name: compliance_delta_pp, description: Écart de conformité comparé moins référence en points de pourcentage.}
+      - {name: avg_response_time_from_s, description: Latence moyenne du prompt de référence en secondes.}
+      - {name: avg_response_time_to_s, description: Latence moyenne du prompt comparé en secondes.}
+      - {name: response_time_delta_s, description: Écart de latence comparé moins référence en secondes.}
+
+  - name: mart_category
+    description: Réussite stricte par modèle, prompt et catégorie OpenTDB.
+    data_tests:
+      - gold_grain:
+          arguments: {keys: [model_id, prompt_id, category_id], row_count: 144}
+      - gold_dimension_concordance:
+          arguments: {dimensions: [category_id, category]}
+    columns:
+      - {name: model_id, description: Identifiant du modèle.}
+      - {name: prompt_id, description: Identifiant du prompt.}
+      - {name: category_id, description: Identifiant OpenTDB de la catégorie.}
+      - {name: category, description: Libellé de la catégorie.}
+      - &response_count {name: response_count, description: Nombre de réponses reçues dans le groupe.}
+      - &correct_count {name: correct_count, description: Nombre de réponses strictement correctes.}
+      - &success_pct {name: success_pct, description: Réponses correctes en pourcentage des réponses reçues.}
+
+  - name: mart_category_gap
+    description: Écart de réussite Gemma moins Ministral par prompt et catégorie, issu de mart_category.
+    data_tests:
+      - gold_grain:
+          arguments: {keys: [prompt_id, category_id], row_count: 72}
+    columns:
+      - {name: prompt_id, description: Identifiant du prompt.}
+      - {name: category_id, description: Identifiant OpenTDB de la catégorie.}
+      - {name: category, description: Libellé de la catégorie.}
+      - {name: gemma_success_pct, description: Réussite de Gemma en pourcentage.}
+      - {name: ministral_success_pct, description: Réussite de Ministral en pourcentage.}
+      - {name: success_gap_pp, description: Écart signé Gemma moins Ministral en points de pourcentage.}
+      - {name: is_tie, description: Égalité exacte des proportions de bonnes réponses.}
+
+  - name: mart_difficulty
+    description: Réussite stricte par modèle, prompt et difficulté OpenTDB.
+    data_tests:
+      - gold_grain:
+          arguments: {keys: [model_id, prompt_id, difficulty], row_count: 18}
+      - gold_dimension_concordance:
+          arguments: {dimensions: [difficulty]}
+    columns:
+      - {name: model_id, description: Identifiant du modèle.}
+      - {name: prompt_id, description: Identifiant du prompt.}
+      - {name: difficulty, description: Niveau de difficulté OpenTDB.}
+      - *response_count
+      - *correct_count
+      - *success_pct
+
+  - name: mart_question_type
+    description: Réussite stricte par modèle, prompt et type de question OpenTDB.
+    data_tests:
+      - gold_grain:
+          arguments: {keys: [model_id, prompt_id, type], row_count: 12}
+      - gold_dimension_concordance:
+          arguments: {dimensions: [type]}
+    columns:
+      - {name: model_id, description: Identifiant du modèle.}
+      - {name: prompt_id, description: Identifiant du prompt.}
+      - {name: type, description: 'Type OpenTDB, QCM ou vrai/faux.'}
+      - *response_count
+      - *correct_count
+      - *success_pct
+
+  - name: mart_question_outcomes
+    description: Une ligne par question, avec son descriptif OpenTDB et son résultat sur les six configurations.
+    data_tests:
+      - gold_grain:
+          arguments: {keys: [question_id], row_count: 5290}
+    columns:
+      - {name: question_id, description: Identifiant stable de la question.}
+      - {name: question, description: Libellé anglais de la question.}
+      - {name: type, description: 'Type OpenTDB, QCM ou vrai/faux.'}
+      - {name: difficulty, description: Niveau de difficulté OpenTDB.}
+      - {name: category_id, description: Identifiant OpenTDB de la catégorie.}
+      - {name: category, description: Libellé de la catégorie.}
+      - {name: correct_answer, description: Texte de la bonne réponse de référence.}
+      - {name: incorrect_answers, description: Liste originale des distracteurs Silver.}
+      - {name: answer_choices, description: Liste des choix dans l’ordre du benchmark.}
+      - {name: expected_answer, description: Réponse attendue par le scoring strict.}
+      - {name: configuration_count, description: Nombre de couples modèle et prompt distincts.}
+      - {name: outcome, description: 'Classe all_correct, all_incorrect ou mixed selon les scores stricts.'}

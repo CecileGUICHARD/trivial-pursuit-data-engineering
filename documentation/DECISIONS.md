@@ -6,7 +6,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 ## Sommaire
 
-35 décisions recensées · 28 retenues, 2 abandonnées, 4 remplacées et 1 proposée.
+36 décisions recensées · 29 retenues, 2 abandonnées et 5 remplacées.
 
 | Décision | Statut |
 | --- | --- |
@@ -42,9 +42,10 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 | [DEC-030 · Retenir Ministral comme deuxième modèle complet](#dec-030--retenir-ministral-comme-deuxième-modèle-complet) | retenue |
 | [DEC-031 · Archiver les échecs de transport avérés et reprendre les positions non reçues](#dec-031--archiver-les-échecs-de-transport-avérés-et-reprendre-les-positions-non-reçues) | retenue |
 | [DEC-032 · Construire une One Big Table dans le Silver consolidé](#dec-032--construire-une-one-big-table-dans-le-silver-consolidé) | remplacée |
-| [DEC-033 · Préciser le modèle relationnel et le dictionnaire Gold](#dec-033--préciser-le-modèle-relationnel-et-le-dictionnaire-gold) | proposée |
+| [DEC-033 · Préciser le modèle relationnel et le dictionnaire Gold](#dec-033--préciser-le-modèle-relationnel-et-le-dictionnaire-gold) | remplacée |
 | [DEC-034 · Appliquer la séparation des couches du cours D42](#dec-034--appliquer-la-séparation-des-couches-du-cours-d42) | retenue |
 | [DEC-035 · Publier tous les Parquet définitifs des benchmarks](#dec-035--publier-tous-les-parquet-définitifs-des-benchmarks) | retenue |
+| [DEC-036 · Matérialiser sept marts spécialisés dans Gold](#dec-036--matérialiser-sept-marts-spécialisés-dans-gold) | retenue |
 
 [Informations manquantes et écarts entre les sources](#informations-manquantes-et-écarts-entre-les-sources)
 
@@ -347,12 +348,12 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 ### DEC-033 · Préciser le modèle relationnel et le dictionnaire Gold
 
-**Statut** proposée.
+**Statut** remplacée. DEC-036 fixe les grains, mesures et dépendances du lot 8.
 
 - **Contexte.** Le schéma D42 réserve Gold aux marts métier (DEC-034). Le détail des produits analytiques reste à arbitrer.
-- **Proposition et justification.** Préciser le modèle relationnel et le dictionnaire des données Gold. La documentation en vigueur les mentionne comme travaux ouverts et ne consigne aucun schéma détaillé validé.
-- **Conséquences et limites.** Les mesures déjà définies par le protocole constituent la référence pour le futur dictionnaire. Les choix de tables, relations et granularités Gold restent à valider. Aucune variante détaillée de modèle Gold n’est documentée.
-- **Références.** Décision ouverte dès `cadb884`. [Choix à arbitrer](ARCHITECTURE.md#choix-à-arbitrer) · [Mesures](ARCHITECTURE.md#benchmark)
+- **Proposition et justification.** Préciser le modèle relationnel et le dictionnaire des données Gold. Au moment de la proposition, leurs détails restaient ouverts.
+- **Conséquences et limites.** Les mesures déjà définies par le protocole constituaient la référence pour le futur dictionnaire. Le périmètre arrêté au lot 8 est documenté dans DEC-036.
+- **Références.** Proposition ouverte dès `cadb884`. [Mesures du benchmark](ARCHITECTURE.md#benchmark)
 
 ### DEC-034 · Appliquer la séparation des couches du cours D42
 
@@ -360,7 +361,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 - **Contexte et solutions.** DEC-032 classait l’OBT dans le Silver consolidé. Une orientation intermédiaire prévoyait sa construction directement en Python et DuckDB, en amont de dbt. La clarification D42 remplace cette orientation avant sa mise en œuvre et fixe le point d’entrée de dbt aux sept Parquet validés.
 - **Choix et justification.** Conserver les données brutes en Bronze et les Parquet préparés par Python en Silver. Affecter à dbt `staging` la lecture, le typage et l’harmonisation du Silver, puis à `intermediate` l’union et l’OBT détaillée. Réserver Gold aux marts métier dans DuckDB pour Power BI, Qlik, la data science ou les applications métier. Cette répartition suit le cours et distingue la préparation des sources, les transformations intermédiaires et les produits de consommation.
-- **Conséquences et limites.** L’OBT est matérialisée dans `intermediate.obt_silver`, avec le même grain, les mêmes 22 colonnes et les mêmes valeurs que la table validée à `e76715e`. Les 27 tests ont été réexécutés dans la nouvelle base dbt. Le lignage actif va des sept Parquet à l’OBT. La base et les fichiers du jalon précédent assurent la traçabilité. Les marts métier restent à définir selon DEC-033.
+- **Conséquences et limites.** L’OBT est matérialisée dans `intermediate.obt_silver`, avec le même grain, les mêmes 22 colonnes et les mêmes valeurs que la table validée à `e76715e`. Les 27 tests ont été réexécutés dans la nouvelle base dbt. Le lignage de ce jalon allait des sept Parquet à l’OBT. La base et les fichiers du jalon précédent assurent la traçabilité. DEC-036 prolonge le lignage jusqu’aux marts métier.
 - **Références.** [Contrôles du reclassement](CURRENT.md#alignement-sur-le-schéma-d42) · [OBT dans dbt intermediate](ARCHITECTURE.md#obt-détaillée-dans-dbt-intermediate) · [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
 
 ### DEC-035 · Publier tous les Parquet définitifs des benchmarks
@@ -371,6 +372,15 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 - **Choix et justification.** Étendre DEC-017 avec huit exceptions nominatives pour partager les douze exports complets Bronze et Silver. Le code et les sept sources dbt sont alors disponibles dans le même commit. Les empreintes SHA-256 servent à rapprocher les fichiers publiés des fichiers validés localement.
 - **Conséquences et limites.** Un clone fournit les 31 740 résultats Silver nécessaires à la reconstruction de l’OBT. Les journaux, les secrets, les bases locales, les essais et les fichiers de reprise restent dans le périmètre local. Les mesures réutilisées des pilotes Gemma et Ministral figurent déjà dans les exports complets.
 - **Références.** [Inventaire de publication](../README.md#jeux-de-données-disponibles-sur-github) · [Publication collaborative](CURRENT.md#publication-collaborative-des-données-définitives) · [Exceptions Git](../.gitignore)
+
+### DEC-036 · Matérialiser sept marts spécialisés dans Gold
+
+**Statut** retenue.
+
+- **Contexte.** Le lot 8 doit livrer des agrégats lisibles et reproductibles à partir de l’OBT validée. Les comparaisons par configuration, les paires de prompts et les résultats par question ont des grains différents.
+- **Choix et justification.** Matérialiser sept tables, chacune au grain demandé. L’OBT fournit la référence unique des scores et latences. `mart_category_gap` réutilise `mart_category` pour garder les mêmes effectifs et règles de calcul. Des marts séparés rendent explicites les dénominateurs et les dimensions de filtre disponibles.
+- **Conséquences et limites.** Les taux gardent leur précision et les réponses hors format restent identifiables. Les 14 tests Gold contrôlent les grains, les mesures et la couverture des paires et configurations. Les 27 tests historiques sont conservés. La restitution à partir de ces marts reste une étape distincte.
+- **Références.** [Grains et calculs Gold](ARCHITECTURE.md#gold-et-restitution) · [Contrôles du lot 8](CURRENT.md#lot-8--construction-de-gold)
 
 ## Informations manquantes et écarts entre les sources
 

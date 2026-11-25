@@ -2,14 +2,14 @@
 
 Mis à jour le 25 novembre 2026. Le lot 4 est définitivement clos. L’utilisatrice a validé les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct ainsi que leur comparaison sur les mêmes 5 290 questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`.
 
-L’utilisatrice a validé l’alignement sur le schéma D42 et les résultats des contrôles. Les sept Parquet préparés constituent Silver et l’OBT détaillée est matérialisée dans `dbt intermediate`. Gold est réservé aux futurs marts métier. [Alignement et contrôles](#alignement-sur-le-schéma-d42)
+L’utilisatrice a validé l’alignement sur le schéma D42. Les sept Parquet constituent Silver et l’OBT est matérialisée dans `dbt intermediate`. L’utilisatrice a validé les sept marts du lot 8 et leurs résultats. [Résultats du lot 8](#lot-8--construction-de-gold)
 
 ## Travail réalisé
 
 - Debian sous WSL, VS Code et `.venv` opérationnels. Le dépôt GitHub a été initialisé avec le commit `cdb0286` (« Initialisation du projet et extraction Bronze »).
 - Le pilote du 23 novembre a collecté 50 questions sur 15 catégories, dont 43 QCM et 7 questions vrai/faux. Il compte 15 questions faciles, 19 intermédiaires et 16 difficiles. Les six champs sont renseignés et les libellés sont uniques. Le CSV pilote est conservé localement dans `data/bronze/questions_test_50.csv`. Il sert à vérifier le fonctionnement de la collecte.
 - La collecte complète du 23 novembre est disponible dans `data/bronze/questions_raw.csv`. Son fichier de reprise reste ignoré par Git. Les contrôles d’exploration ont été rejoués le 24 novembre.
-- Les dossiers `data/silver/`, `data/gold/`, `dbt/` et `app/` sont prêts à accueillir les étapes suivantes. Le [README](../README.md) sert de point d’entrée et la [référence technique](ARCHITECTURE.md) consigne les choix validés.
+- Les dossiers `data/silver/`, `dbt/` et `app/` structurent les données préparées, les transformations et la restitution prévue. [README](../README.md) · [Référence technique](ARCHITECTURE.md)
 
 ## Contrôles Bronze du 23 novembre (collecte complète)
 
@@ -403,8 +403,27 @@ Les sept Parquet préparés par Python forment Silver et constituent le point de
 
 La comparaison en lecture seule avec `silver.obt_silver` dans la base historique confirme le même ordre de colonnes, les mêmes types et la même nullabilité. Les `EXCEPT ALL` dans les deux sens retournent chacun zéro ligne. Les tests de source confirment la concordance des valeurs, scores, statuts et latences, `NULL` compris. Les empreintes SHA-256 des 86 fichiers Bronze et Silver préexistants concordent, dont les sept Parquet et la base de référence.
 
-La documentation dbt régénérée dans `dbt/target/static_index.html` expose le lignage jusqu’à `intermediate.obt_silver`. Les résultats du nouveau build sont dans `dbt/target/build_run_results.json`. [Dictionnaire, qualité et lignage](ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt) · [Procédure](../README.md#construire-et-documenter-lobt-intermédiaire)
+La documentation dbt de ce jalon exposait le lignage jusqu’à `intermediate.obt_silver`. Les résultats de ce build sont dans `dbt/target/build_run_results.json`. [Dictionnaire, qualité et lignage](ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt) · [Procédure](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
 
 ## Publication collaborative des données définitives
 
-Le dépôt versionne les douze Parquet définitifs de Gemma et Ministral, soit six en Bronze et six en Silver. Les huit fichiers ajoutés correspondent à Gemma P3 et aux trois prompts de Ministral dans les deux couches. Avec le corpus OpenTDB final, les six exports Silver donnent les sept sources du projet dbt et couvrent 31 740 résultats de benchmark. Le CSV Bronze OpenTDB, les jalons Parquet, les rapports qualité et les scripts sont également disponibles dans le dépôt. [Inventaire des données publiées](../README.md#jeux-de-données-disponibles-sur-github) · [Procédure dbt](../README.md#construire-et-documenter-lobt-intermédiaire)
+Le dépôt versionne les douze Parquet définitifs de Gemma et Ministral, soit six en Bronze et six en Silver. Les huit fichiers ajoutés correspondent à Gemma P3 et aux trois prompts de Ministral dans les deux couches. Avec le corpus OpenTDB final, les six exports Silver donnent les sept sources du projet dbt et couvrent 31 740 résultats de benchmark. Le CSV Bronze OpenTDB, les jalons Parquet, les rapports qualité et les scripts sont également disponibles dans le dépôt. [Inventaire des données publiées](../README.md#jeux-de-données-disponibles-sur-github) · [Procédure dbt](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
+
+## Lot 8 · Construction de Gold
+
+Les sept marts sont matérialisés dans le schéma `gold` de `data/trivial_pursuit.duckdb`. Leur lignage part de `intermediate.obt_silver` et `mart_category_gap` réutilise `mart_category`. La définition des grains, des unités et des mesures figure dans l’architecture. [Marts Gold](ARCHITECTURE.md#gold-et-restitution)
+
+| Modèle et prompt | Correctes | Incorrectes conformes | Hors format | Réussite | Conformité | Latence moyenne |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Gemma P1 | 2 863 | 2 427 | 0 | 54,12 % | 100,00 % | 0,463 s |
+| Gemma P2 | 2 852 | 2 438 | 0 | 53,91 % | 100,00 % | 0,466 s |
+| Gemma P3 | 2 753 | 2 482 | 55 | 52,04 % | 98,96 % | 0,522 s |
+| Ministral P1 | 2 844 | 2 434 | 12 | 53,76 % | 99,77 % | 0,736 s |
+| Ministral P2 | 2 779 | 2 408 | 103 | 52,53 % | 98,05 % | 0,733 s |
+| Ministral P3 | 2 182 | 1 984 | 1 124 | 41,25 % | 78,75 % | 1,092 s |
+
+Chaque comparaison couvre 5 290 paires. Pour P3−P1, Gemma compte 313 gains et 423 pertes (−2,08 points de réussite), et Ministral 155 gains et 817 pertes (−12,51 points). Sur les six configurations, 1 379 questions sont toujours correctes, 1 278 toujours incorrectes et 2 633 ont un résultat mixte.
+
+Le `dbt build` intégral en base de vérification a réussi pour 16 modèles et 41 tests. Le build ciblé dans la base de travail a matérialisé les sept marts et exécuté leurs 14 tests, puis `dbt test` a confirmé les 41 tests, dont les 27 tests historiques. Le catalogue confirme les sept tables et leurs dimensions attendues. La documentation statique du lignage a été régénérée dans `dbt/target/static_index.html`.
+
+Les SHA-256 des 86 fichiers Bronze et Silver concordent. Les définitions des huit vues et de l’OBT, leurs schémas et les valeurs de l’OBT ont été comparés avant et après le build ciblé, avec zéro écart dans les deux sens. L’ancien `data/gold/` ne contenait qu’un `.gitkeep` et le projet dbt écrit dans `data/trivial_pursuit.duckdb`. Ce répertoire vide a été retiré. [Procédure de reconstruction](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)

@@ -29,7 +29,6 @@ __pycache__/
 !/data/silver/gemma_p1_choices.parquet
 !/data/silver/gemma_p2_expert.parquet
 /data/gold/*
-!/data/gold/.gitkeep
 
 # Garder le dossier accessible aux exceptions et ignorer ses fichiers locaux.
 !/data/silver/pilot_lot2/

@@ -25,7 +25,7 @@ flowchart LR
     ResultatsStaging --> Union[dbt intermediate · UNION ALL des six benchmarks]
     Union --> OBT[dbt intermediate · table intermediate.obt_silver]
     QuestionsStaging -->|JOIN sur question_id| OBT
-    OBT -.-> Gold[Gold · marts métier dans DuckDB]
+    OBT --> Gold[Gold · sept tables métier dans DuckDB]
     Gold -.-> App[Consommation · Power BI, Qlik, data science, application métier]
 ```
 
@@ -139,11 +139,29 @@ Les tests vérifient les effectifs globaux, les six combinaisons modèle–promp
 
 Deux tests comparent directement aux Parquet les 13 colonnes de benchmark et les 10 colonnes du corpus, répliquées six fois dans le second cas. Les `EXCEPT ALL` dans les deux sens comparent les valeurs et leur multiplicité, y compris les `NULL`, les listes et leur ordre. Le test de scoring recalcule la conformité et l’exactitude pour comparaison avec les valeurs historiques. Le reclassement a également été vérifié contre la table de référence `silver.obt_silver` du jalon `e76715e`, conservée dans `data/silver/obt_silver.duckdb`. [Tests SQL](../dbt/tests/) · [Contrôles D42](CURRENT.md#alignement-sur-le-schéma-d42)
 
-La documentation dbt générée expose le graphe des sept sources, des sept vues de staging, de la vue d’union et de l’OBT. Pour ouvrir le graphe, charger `dbt/target/static_index.html` dans un navigateur local, sélectionner `obt_silver` puis ouvrir **Lineage Graph**. [Procédure reproductible](../README.md#construire-et-documenter-lobt-intermédiaire)
+La documentation dbt générée expose le graphe des sept sources, des vues de staging, de l’OBT et des marts Gold. Pour ouvrir le graphe, charger `dbt/target/static_index.html` dans un navigateur local, sélectionner `obt_silver` puis ouvrir **Lineage Graph**. [Procédure reproductible](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
 
 ### Gold et restitution
 
-Les scripts Python produisent les Parquet Silver. Le lignage dbt commence à ces fichiers et traverse `staging` puis `intermediate`. Pour la cible locale, la macro de nommage affecte les modèles des dossiers `staging`, `intermediate` et `marts` aux schémas `staging`, `intermediate` et `gold`. `marts` est réservé aux tables métier Gold, seules destinées à la consommation finale. Le build actuel contient huit vues et une table détaillée réparties entre `staging` et `intermediate`. [Nommage des schémas](../dbt/macros/generate_schema_name.sql)
+Les scripts Python produisent les Parquet Silver. Le lignage dbt commence à ces fichiers et traverse `staging` puis `intermediate`. La cible locale affecte les modèles `marts` au schéma `gold`. Les sept marts sont matérialisés en tables dans `data/trivial_pursuit.duckdb`. Six lisent uniquement `intermediate.obt_silver` par `ref('obt_silver')`. Le septième, `mart_category_gap`, réutilise les agrégats de `mart_category`. [Nommage des schémas](../dbt/macros/generate_schema_name.sql) · [Modèles et dictionnaire Gold](../dbt/models/marts/marts.yml)
+
+| Mart | Grain | Lignes × colonnes | Calcul et dimensions |
+| --- | --- | ---: | --- |
+| `mart_performance` | `model_id`, `prompt_id` | 6 × 11 | Effectif et pourcentage des réponses correctes, incorrectes conformes et hors format. Conformité et latence moyenne. |
+| `mart_prompt_comparison` | `model_id`, `prompt_from`, `prompt_to` | 6 × 17 | Auto-jointure par `question_id` et modèle. P2−P1, P3−P1 et P3−P2. Effectifs des quatre transitions, mesures avant/après et écarts. |
+| `mart_category` | `model_id`, `prompt_id`, `category_id` | 144 × 7 | Libellé `category`, effectif, bonnes réponses et réussite stricte. |
+| `mart_category_gap` | `prompt_id`, `category_id` | 72 × 7 | Appariement des deux modèles dans `mart_category`, libellé `category`, taux par modèle, écart signé Gemma − Ministral et égalité. |
+| `mart_difficulty` | `model_id`, `prompt_id`, `difficulty` | 18 × 6 | Effectif, bonnes réponses et réussite stricte pour chaque difficulté. |
+| `mart_question_type` | `model_id`, `prompt_id`, `type` | 12 × 6 | Effectif, bonnes réponses et réussite stricte pour les QCM et les vrai/faux. |
+| `mart_question_outcomes` | `question_id` | 5 290 × 12 | Dix attributs OpenTDB, nombre de configurations distinctes et classe `all_correct`, `all_incorrect` ou `mixed`. |
+
+`mart_question_outcomes` conserve trois champs de la question en plus des neuf colonnes du périmètre initial. `incorrect_answers` expose les distracteurs normalisés issus du Silver, `answer_choices` restitue l’ordre des choix présenté aux modèles et `expected_answer` donne la valeur comparée lors du scoring strict (lettre du QCM ou `True`/`False`). Ces champs assurent la traçabilité du résultat question par question. Les deux seules colonnes calculées sont `configuration_count` et `outcome`.
+
+Les taux sont des pourcentages des réponses reçues ou des paires. Les réponses hors format restent incorrectes au scoring et constituent un statut séparé dans `mart_performance`. Les écarts de taux sont exprimés en points de pourcentage, et les latences en secondes. Les calculs conservent leur précision jusqu’à l’affichage. Pour une catégorie, l’égalité compare les proportions via les produits croisés des effectifs.
+
+Des marts spécialisés fixent le grain de chaque usage et gardent les dimensions nécessaires aux futurs filtres. La performance par configuration, les transitions appariées et la classification par question ont des dénominateurs différents. Les séparer évite de les confondre. `mart_category_gap` réutilise le grain déjà contrôlé de `mart_category` et calcule l’écart à partir des mêmes taux.
+
+Les 14 tests Gold vérifient les grains, les volumes et les KPI par rapprochement avec l’OBT. Le contrôle des transitions reconstruit les paires par pivot des scores, puis vérifie les effectifs et les mesures avant/après. Les moyennes de latence sont comparées avec une tolérance de `1e-10` seconde pour les calculs flottants. Les 27 tests historiques ont aussi été rejoués. [Résultats du lot 8](CURRENT.md#lot-8--construction-de-gold) · [Procédure dbt](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
 
 ### Benchmark
 
@@ -249,4 +267,4 @@ Les six exports complets sont versionnés sous `data/bronze/benchmark_ministral_
 
 ## Choix à arbitrer
 
-- Modèle relationnel détaillé et dictionnaire des données Gold.
+- Outil et modalités de restitution à partir des marts Gold.
