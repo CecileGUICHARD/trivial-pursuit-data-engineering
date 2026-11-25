@@ -72,7 +72,7 @@ La configuration de reprise du journal pointe vers le SHA-256 du corpus actif. L
 
 Pour le lot 4, `benchmark_gemma.py` copie le journal local du pilote et fixe un manifeste de 5 290 questions. L’ordre reprend les 530 rangs du pilote, puis l’ordre du Silver pour les 4 760 questions restantes. Les deux premiers prompts partagent cet ordre. Le contrôle d’exécution compare le moteur sélectionné et la configuration effective aux paramètres du pilote. Les exports P1 et P2 sont versionnés dans `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`. Le journal et le manifeste d’exécution sont locaux.
 
-`benchmark_gemma.py executer --p3` reprend le même manifeste et initialise `data/silver/benchmark_lot4/benchmark_p3.duckdb` par copie du journal du pilote P3. L’empreinte du manifeste complet remplace celle du pilote dans la configuration de reprise. Chaque tentative du pilote conserve sa configuration, sa réponse brute, son identifiant et sa latence. Le contrôle compare l’empreinte du gabarit et les autres réglages au pilote P3, puis le bloc envoie uniquement les questions dont le journal ne contient pas de tentative. Les réponses hors format sont conservées avec leur score incorrect. Les deux Parquet P3 complets sont locaux, sous `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`. `benchmark_gemma.py bilan --p3` compare les trois prompts depuis les deux journaux complets.
+`benchmark_gemma.py executer --p3` reprend le même manifeste et initialise `data/silver/benchmark_lot4/benchmark_p3.duckdb` par copie du journal du pilote P3. L’empreinte du manifeste complet remplace celle du pilote dans la configuration de reprise. Chaque tentative du pilote conserve sa configuration, sa réponse brute, son identifiant et sa latence. Le contrôle compare l’empreinte du gabarit et les autres réglages au pilote P3, puis le bloc envoie uniquement les questions dont le journal ne contient pas de tentative. Les réponses hors format sont conservées avec leur score incorrect. Les deux Parquet P3 complets sont versionnés sous `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`. `benchmark_gemma.py bilan --p3` compare les trois prompts depuis les deux journaux complets.
 
 Le contrôle de clôture a retrouvé les 5 290 identifiants du corpus une fois par prompt dans chaque couche. Les trois prompts suivent le même ordre et les champs communs concordent ligne par ligne entre Bronze et Silver, avec 15 870 `inference_id` distincts. Les 530 lignes réutilisées de P3 sont identiques aux lignes du pilote à la relecture des deux couches. Le scoring strict recalculé concorde avec les trois tables Silver. [Résultats et durées définitifs](CURRENT.md#comparaison-complète-des-trois-prompts)
 
@@ -85,10 +85,10 @@ Le corpus OpenTDB final et les six résultats complets Gemma 4 E2B et Ministral 
 | Corpus OpenTDB | `data/silver/questions_clean.parquet` | 5 290 lignes × 10 colonnes | Versionné |
 | Gemma P1 | `data/silver/benchmark_lot4/gemma_p1_choices.parquet` | 5 290 réponses | Versionné |
 | Gemma P2 | `data/silver/benchmark_lot4/gemma_p2_expert.parquet` | 5 290 réponses | Versionné |
-| Gemma P3 | `data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet` | 5 290 réponses | Local |
-| Ministral P1 | `data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet` | 5 290 réponses | Local |
-| Ministral P2 | `data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet` | 5 290 réponses | Local |
-| Ministral P3 | `data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet` | 5 290 réponses | Local |
+| Gemma P3 | `data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet` | 5 290 réponses | Versionné |
+| Ministral P1 | `data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet` | 5 290 réponses | Versionné |
+| Ministral P2 | `data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet` | 5 290 réponses | Versionné |
+| Ministral P3 | `data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet` | 5 290 réponses | Versionné |
 
 Les six exports complets incluent déjà les mesures Gemma et Ministral réutilisées lors de la reprise. Les fichiers de pilote séparés et les 13 échecs de transport de la table `echecs_transport_reprise` relèvent de la traçabilité. Les pilotes Bonsai et Qwen sont hors du périmètre de l’OBT et des agrégations Gold. Les réponses reçues hors format sont présentes dans l’OBT et comptent comme incorrectes au scoring strict. [Arbitrage du deuxième modèle](CURRENT.md#choix-définitif-du-deuxième-modèle) · [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
 
@@ -245,7 +245,7 @@ Avant chaque exécution ou reprise, le script compare la configuration de l’in
 
 Après l’interruption du client HTTP sur P3, le rapprochement avec les journaux LM Studio a confirmé que 13 tentatives sans réponse étaient restées côté client. Une transaction a archivé ces 13 lignes dans `echecs_transport_reprise` et libéré leurs positions pour le segment suivant. Les 13 739 réponses déjà reçues et leurs identifiants ont été repris. Le moteur Vulkan 2.80.1 a été resélectionné avant le rechargement de l’instance.
 
-Les exports et le journal restent locaux sous `data/bronze/benchmark_ministral_lot4/` et `data/silver/benchmark_ministral_lot4/`. `benchmark_ministral.py bilan` relit les deux benchmarks et compare les réponses par `question_id` pour chaque prompt. [Suivi du benchmark](CURRENT.md#benchmark-complet-ministral-du-lot-4)
+Les six exports complets sont versionnés sous `data/bronze/benchmark_ministral_lot4/` et `data/silver/benchmark_ministral_lot4/`. Le journal de reprise reste local. `benchmark_ministral.py bilan` relit les deux benchmarks et compare les réponses par `question_id` pour chaque prompt. [Suivi du benchmark](CURRENT.md#benchmark-complet-ministral-du-lot-4)
 
 ## Choix à arbitrer
 

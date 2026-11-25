@@ -6,7 +6,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 ## Sommaire
 
-34 décisions recensées · 27 retenues, 2 abandonnées, 4 remplacées et 1 proposée.
+35 décisions recensées · 28 retenues, 2 abandonnées, 4 remplacées et 1 proposée.
 
 | Décision | Statut |
 | --- | --- |
@@ -44,6 +44,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 | [DEC-032 · Construire une One Big Table dans le Silver consolidé](#dec-032--construire-une-one-big-table-dans-le-silver-consolidé) | remplacée |
 | [DEC-033 · Préciser le modèle relationnel et le dictionnaire Gold](#dec-033--préciser-le-modèle-relationnel-et-le-dictionnaire-gold) | proposée |
 | [DEC-034 · Appliquer la séparation des couches du cours D42](#dec-034--appliquer-la-séparation-des-couches-du-cours-d42) | retenue |
+| [DEC-035 · Publier tous les Parquet définitifs des benchmarks](#dec-035--publier-tous-les-parquet-définitifs-des-benchmarks) | retenue |
 
 [Informations manquantes et écarts entre les sources](#informations-manquantes-et-écarts-entre-les-sources)
 
@@ -202,7 +203,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 - **Contexte et solutions.** La collecte, les journaux et les rapports sont d’abord locaux. Le partage de livrables contrôlés permet aux lecteurs de retrouver les jalons sans relancer la collecte.
 - **Choix et justification.** Publier le CSV Bronze de référence, les Parquet Silver de référence et les rapports de qualité retenus. Étendre ensuite les exceptions Git au manifeste Gemma validé, à ses métadonnées et aux exports Gemma P1/P2 sélectionnés. Ignorer par défaut les données générées, les bases et journaux DuckDB, les états de reprise, `.venv` et les secrets.
-- **Conséquences et limites.** Gemma P3 et les trois exports complets Ministral restent locaux. Un clone Git seul ne fournit donc que trois des sept sources de la future OBT. Les exclusions s’appliquent aux fichiers publiés dans le dépôt, tandis que les traces locales restent disponibles pour l’audit.
+- **Conséquences et limites.** Dans le périmètre initial de publication, Gemma P3 et les trois exports complets Ministral restaient locaux. DEC-035 complète les livrables publiés et conserve le principe des exceptions explicites pour les données définitives.
 - **Références.** Commits `294fb25`, `bc4cb0f`, `383848b` et `e981472`. [Fichiers publiés](../README.md#jeux-de-données-disponibles-sur-github) · [Exclusions Git](../.gitignore) · [Disponibilité des sept sources](ARCHITECTURE.md#sources-du-silver-préparé)
 
 ### DEC-018 · Valider un manifeste stratifié et reproductible pour Gemma
@@ -361,6 +362,15 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 - **Choix et justification.** Conserver les données brutes en Bronze et les Parquet préparés par Python en Silver. Affecter à dbt `staging` la lecture, le typage et l’harmonisation du Silver, puis à `intermediate` l’union et l’OBT détaillée. Réserver Gold aux marts métier dans DuckDB pour Power BI, Qlik, la data science ou les applications métier. Cette répartition suit le cours et distingue la préparation des sources, les transformations intermédiaires et les produits de consommation.
 - **Conséquences et limites.** L’OBT est matérialisée dans `intermediate.obt_silver`, avec le même grain, les mêmes 22 colonnes et les mêmes valeurs que la table validée à `e76715e`. Les 27 tests ont été réexécutés dans la nouvelle base dbt. Le lignage actif va des sept Parquet à l’OBT. La base et les fichiers du jalon précédent assurent la traçabilité. Les marts métier restent à définir selon DEC-033.
 - **Références.** [Contrôles du reclassement](CURRENT.md#alignement-sur-le-schéma-d42) · [OBT dans dbt intermediate](ARCHITECTURE.md#obt-détaillée-dans-dbt-intermediate) · [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
+
+### DEC-035 · Publier tous les Parquet définitifs des benchmarks
+
+**Statut** retenue.
+
+- **Contexte.** Le clone de `0b1080c` contenait Gemma P1 et P2 dans les deux couches. Les exports définitifs de Gemma P3 et de Ministral restaient exclus par `.gitignore`, ce qui laissait quatre des sept sources dbt indisponibles depuis GitHub.
+- **Choix et justification.** Étendre DEC-017 avec huit exceptions nominatives pour partager les douze exports complets Bronze et Silver. Le code et les sept sources dbt sont alors disponibles dans le même commit. Les empreintes SHA-256 servent à rapprocher les fichiers publiés des fichiers validés localement.
+- **Conséquences et limites.** Un clone fournit les 31 740 résultats Silver nécessaires à la reconstruction de l’OBT. Les journaux, les secrets, les bases locales, les essais et les fichiers de reprise restent dans le périmètre local. Les mesures réutilisées des pilotes Gemma et Ministral figurent déjà dans les exports complets.
+- **Références.** [Inventaire de publication](../README.md#jeux-de-données-disponibles-sur-github) · [Publication collaborative](CURRENT.md#publication-collaborative-des-données-définitives) · [Exceptions Git](../.gitignore)
 
 ## Informations manquantes et écarts entre les sources
 

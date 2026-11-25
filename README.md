@@ -40,12 +40,20 @@ Télécharger les fichiers ci-dessous depuis GitHub pour les utiliser directemen
 | [`data/silver/pilot_lot2/manifest_metadata.json`](data/silver/pilot_lot2/manifest_metadata.json) | Empreintes du manifeste, du corpus de tirage et du Silver révisé | 991 octets |
 | [`data/bronze/benchmark_lot4/gemma_p1_choices.parquet`](data/bronze/benchmark_lot4/gemma_p1_choices.parquet) | 5 290 mesures brutes du benchmark complet pour `P1_choices` | 502 851 octets |
 | [`data/bronze/benchmark_lot4/gemma_p2_expert.parquet`](data/bronze/benchmark_lot4/gemma_p2_expert.parquet) | 5 290 mesures brutes du benchmark complet pour `P2_expert` | 502 846 octets |
+| [`data/bronze/benchmark_lot4/gemma_p3_expert_advanced.parquet`](data/bronze/benchmark_lot4/gemma_p3_expert_advanced.parquet) | 5 290 mesures brutes Gemma pour `P3_expert_advanced` | 506 618 octets |
 | [`data/silver/benchmark_lot4/gemma_p1_choices.parquet`](data/silver/benchmark_lot4/gemma_p1_choices.parquet) | 5 290 résultats structurés du benchmark complet pour `P1_choices` | 484 464 octets |
 | [`data/silver/benchmark_lot4/gemma_p2_expert.parquet`](data/silver/benchmark_lot4/gemma_p2_expert.parquet) | 5 290 résultats structurés du benchmark complet pour `P2_expert` | 484 459 octets |
+| [`data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet`](data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet) | 5 290 résultats structurés Gemma pour `P3_expert_advanced` | 488 586 octets |
+| [`data/bronze/benchmark_ministral_lot4/ministral_p1_choices.parquet`](data/bronze/benchmark_ministral_lot4/ministral_p1_choices.parquet) | 5 290 mesures brutes Ministral pour `P1_choices` | 503 784 octets |
+| [`data/bronze/benchmark_ministral_lot4/ministral_p2_expert.parquet`](data/bronze/benchmark_ministral_lot4/ministral_p2_expert.parquet) | 5 290 mesures brutes Ministral pour `P2_expert` | 503 972 octets |
+| [`data/bronze/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet`](data/bronze/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet) | 5 290 mesures brutes Ministral pour `P3_expert_advanced` | 522 994 octets |
+| [`data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet`](data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet) | 5 290 résultats structurés Ministral pour `P1_choices` | 485 512 octets |
+| [`data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet`](data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet) | 5 290 résultats structurés Ministral pour `P2_expert` | 486 125 octets |
+| [`data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet`](data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet) | 5 290 résultats structurés Ministral pour `P3_expert_advanced` | 505 538 octets |
 
 Les trois CSV de qualité utilisent le point-virgule comme séparateur. Le diagnostic et son classement documentent les propositions. Le rapport définitif indique celles qui ont été appliquées.
 
-Les exports complets du lot 4 pour Gemma P3 et pour les trois prompts Ministral sont disponibles localement. Les journaux DuckDB de reprise, le manifeste d’exécution du lot 4, l’essai historique, les copies du candidat final et les fichiers temporaires sont également locaux. [Chemins des sources Silver validées](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
+Un clone du dépôt contient les douze Parquet définitifs des benchmarks. Les six exports Silver totalisent 31 740 résultats et fournissent, avec le corpus OpenTDB final, toutes les sources du build dbt. Les journaux DuckDB de reprise, le manifeste d’exécution du lot 4, l’essai historique, les copies du candidat final et les fichiers temporaires restent locaux. [Chemins des sources Silver validées](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
 
 ## Source des données
 
@@ -67,7 +75,7 @@ python -m pip install requests pandas
 
 ### Construire et documenter l’OBT intermédiaire
 
-Les sept Parquet validés doivent être présents aux chemins indiqués dans l’architecture, dont quatre fichiers locaux. Le profil dbt utilise des chemins relatifs à `dbt/`. Depuis la racine du dépôt, avec la `.venv` existante, installer les versions vérifiées et lancer les commandes ci-dessous. [Chemins des sept sources](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
+Un clone à jour fournit les sept Parquet validés aux chemins utilisés par le projet dbt. Le profil utilise des chemins relatifs à `dbt/`. Depuis la racine du dépôt, avec la `.venv` créée à l’étape d’installation, installer les versions épinglées et lancer les commandes ci-dessous. [Chemins des sept sources](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
 
 ```bash
 .venv/bin/python -m pip install -r dbt/requirements.txt
@@ -172,7 +180,7 @@ python benchmark_gemma.py executer --lm-studio-version '0.4.28+2' \
 
 Sous WSL avec LM Studio sur Windows, passer les chemins de `lms.exe` et `curl.exe` via `--lms` et `--curl`. L’exécution vérifie la configuration et le moteur avant chaque reprise. `python benchmark_gemma.py bilan` lit les indicateurs du journal local lorsque celui-ci est fermé.
 
-La reprise P3 utilise le manifeste complet du lot 4 et les 530 mesures de son propre pilote. Les Parquet P3 complets sont locaux. Ils ont le même nom, `gemma_p3_expert_advanced.parquet`, dans les répertoires `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`.
+La reprise P3 utilise le manifeste complet du lot 4 et les 530 mesures de son propre pilote. Les Parquet P3 complets sont versionnés sous le nom `gemma_p3_expert_advanced.parquet` dans `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`.
 
 ```bash
 python benchmark_gemma.py executer --p3 --lm-studio-version '0.4.28+2' \

@@ -44,10 +44,22 @@ __pycache__/
 /data/bronze/benchmark_lot4/*
 !/data/bronze/benchmark_lot4/gemma_p1_choices.parquet
 !/data/bronze/benchmark_lot4/gemma_p2_expert.parquet
+!/data/bronze/benchmark_lot4/gemma_p3_expert_advanced.parquet
 !/data/silver/benchmark_lot4/
 /data/silver/benchmark_lot4/*
 !/data/silver/benchmark_lot4/gemma_p1_choices.parquet
 !/data/silver/benchmark_lot4/gemma_p2_expert.parquet
+!/data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet
+!/data/bronze/benchmark_ministral_lot4/
+/data/bronze/benchmark_ministral_lot4/*
+!/data/bronze/benchmark_ministral_lot4/ministral_p1_choices.parquet
+!/data/bronze/benchmark_ministral_lot4/ministral_p2_expert.parquet
+!/data/bronze/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet
+!/data/silver/benchmark_ministral_lot4/
+/data/silver/benchmark_ministral_lot4/*
+!/data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet
+!/data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet
+!/data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet
 
 # Bases de données locales, fichiers temporaires et logs
 *.duckdb
