@@ -2,7 +2,7 @@
 
 Mis à jour le 25 novembre 2026. Le lot 4 est définitivement clos. L’utilisatrice a validé les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct ainsi que leur comparaison sur les mêmes 5 290 questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`.
 
-L’utilisatrice a validé les étapes 5 à 7 et la One Big Table (OBT) Silver. [Construction et contrôles](#construction-et-contrôles-de-lobt-silver)
+L’utilisatrice a validé l’alignement sur le schéma D42 et les résultats des contrôles. Les sept Parquet préparés constituent Silver et l’OBT détaillée est matérialisée dans `dbt intermediate`. Gold est réservé aux futurs marts métier. [Alignement et contrôles](#alignement-sur-le-schéma-d42)
 
 ## Travail réalisé
 
@@ -334,7 +334,7 @@ Le 25 novembre 2026, l’utilisatrice a validé le pilote et retenu **Ministral-
 - **Qwen3 4B Instruct** présentait une durée active extrapolée de 7 h 52 min et une conformité P3 de 0/30.
 - **Ministral 3 3B Instruct** offre le meilleur compromis entre durée, conformité et faisabilité matérielle parmi les pilotes. Il a terminé les 90 inférences sur la machine, avec une conformité de 100 % sur P1 et P2, de 73,3 % sur P3 et une durée active extrapolée de 4 h 52 min.
 
-Les mesures Bonsai et Qwen restent dans les répertoires locaux de leurs pilotes pour la traçabilité. La comparaison Gold sera calculée à partir de l’OBT Silver, alimentée par les benchmarks complets validés de Gemma et Ministral.
+Les mesures Bonsai et Qwen restent dans les répertoires locaux de leurs pilotes pour la traçabilité. Les futurs marts Gold s’appuieront sur l’OBT de `dbt intermediate`, alimentée par les benchmarks complets validés de Gemma et Ministral.
 
 ## Benchmark complet Ministral du lot 4
 
@@ -376,17 +376,15 @@ L’audit confirme 15 870 identifiants d’inférence distincts, l’ordre com
 
 L’utilisatrice a validé définitivement le benchmark Ministral et le comparatif avec Gemma. Les 13 échecs de transport restent archivés dans la table `echecs_transport_reprise` du journal DuckDB. Les phases dbt et Gold sont hors de cette clôture. [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
 
-## Consolidation Silver validée
+## Décision initiale de consolidation
 
 Les sources disponibles sont les sept Parquet validés du Silver préparé. Le corpus OpenTDB contient 5 290 lignes et 10 colonnes. Les six Parquet des benchmarks Gemma et Ministral contiennent chacun 5 290 réponses pour une combinaison modèle–prompt. Le Bronze OpenTDB et LLM reste intact. [Chemins des sept sources](ARCHITECTURE.md#sources-du-silver-préparé)
 
-La décision est de construire l’OBT dans DuckDB avec dbt. `staging` lira et typera les sources. `intermediate` réunira les six benchmarks par `UNION ALL`, puis joindra le corpus sur `question_id`. La cible est de 31 740 lignes, une par combinaison question × modèle × prompt, soit six inférences pour chacune des 5 290 questions distinctes. Les identifiants source, les scores stricts, les statuts et les latences seront conservés. Le périmètre garde les réponses hors format et exclut les pilotes Bonsai et Qwen ainsi que les 13 échecs archivés. [Granularité, justification et traçabilité](ARCHITECTURE.md#one-big-table-du-silver-consolidé)
+La décision initiale classait le résultat de la consolidation en « Silver consolidé ». Elle fixait le grain à une ligne par combinaison question × modèle × prompt et le périmètre aux six benchmarks complets, réponses hors format comprises. L’alignement D42 réaffecte cette OBT à `dbt intermediate` avec les mêmes sources et règles. [Décision initiale et remplacement](DECISIONS.md#dec-032--construire-une-one-big-table-dans-le-silver-consolidé)
 
-Les jeux analytiques et agrégations Gold seront produits dans `marts` à partir de l’OBT, puis consommés par Streamlit. [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
+## Construction initiale et contrôles de l’OBT
 
-## Construction et contrôles de l’OBT Silver
-
-Les étapes 5 à 7 ont produit `silver.obt_silver` dans la base locale `data/silver/obt_silver.duckdb`. `dbt build` a réussi avec dbt Core `1.12.7`, dbt-duckdb `1.11.1` et DuckDB `2.0.1` dans la `.venv` du projet. Le build a matérialisé 8 vues et 1 table et validé les 27 tests de données, sans avertissement ni erreur. [Procédure](../README.md#construire-et-documenter-lobt-silver)
+Les étapes 5 à 7, validées au jalon `e76715e`, ont produit `silver.obt_silver` dans la base locale `data/silver/obt_silver.duckdb`. `dbt build` a réussi avec dbt Core `1.12.7`, dbt-duckdb `1.11.1` et DuckDB `2.0.1` dans la `.venv` du projet. Le build a matérialisé 8 vues et 1 table et validé les 27 tests de données, sans avertissement ni erreur. Cette base est la référence du reclassement D42.
 
 | Contrôle | Résultat |
 | --- | --- |
@@ -397,4 +395,12 @@ Les étapes 5 à 7 ont produit `silver.obt_silver` dans la base locale `data/sil
 | Réponses et `NULL` | 1 294 réponses hors format avec `ai_answer` à `NULL`, dont quatre réponses brutes vides. `error_type` et `error_message` sont conservés avec 31 740 valeurs `NULL` chacun. |
 | Intégrité des sources | Les SHA-256 des 85 fichiers Bronze et Silver préexistants concordent avant et après le build. |
 
-Le manifeste dbt confirme sept sources, sept vues de staging, une vue d’union et deux parents directs pour l’OBT. La documentation statique est générée dans `dbt/target/static_index.html`. Les résultats du build sont conservés localement dans `dbt/target/build_run_results.json`. [Dictionnaire, qualité et lignage](ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt)
+## Alignement sur le schéma D42
+
+Les sept Parquet préparés par Python forment Silver et constituent le point de départ du lignage dbt. La base locale `data/trivial_pursuit.duckdb` regroupe les sept vues dans `staging`, la vue d’union et la table `intermediate.obt_silver`. Le schéma `gold` est réservé aux futurs marts métier consommables par Power BI, Qlik, un environnement de data science ou une application métier. [Décision D42](DECISIONS.md#dec-034--appliquer-la-séparation-des-couches-du-cours-d42)
+
+`dbt build` a réussi de nouveau pour les 9 modèles et 27 tests, avec zéro avertissement et zéro erreur. La relecture confirme 31 740 lignes, 22 colonnes, 5 290 questions distinctes, six résultats par question, 5 290 lignes pour chacune des six combinaisons modèle–prompt et 1 294 réponses hors format conservées. Elle retrouve zéro doublon sur le grain et zéro résultat orphelin.
+
+La comparaison en lecture seule avec `silver.obt_silver` dans la base historique confirme le même ordre de colonnes, les mêmes types et la même nullabilité. Les `EXCEPT ALL` dans les deux sens retournent chacun zéro ligne. Les tests de source confirment la concordance des valeurs, scores, statuts et latences, `NULL` compris. Les empreintes SHA-256 des 86 fichiers Bronze et Silver préexistants concordent, dont les sept Parquet et la base de référence.
+
+La documentation dbt régénérée dans `dbt/target/static_index.html` expose le lignage jusqu’à `intermediate.obt_silver`. Les résultats du nouveau build sont dans `dbt/target/build_run_results.json`. [Dictionnaire, qualité et lignage](ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt) · [Procédure](../README.md#construire-et-documenter-lobt-intermédiaire)

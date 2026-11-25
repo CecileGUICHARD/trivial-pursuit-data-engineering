@@ -4,16 +4,17 @@ Projet du cours D42, ETL et optimisation des architectures de stockage, en M1 Bi
 
 Le projet construit un pipeline reproductible et traçable pour collecter des questions de culture générale, préparer les données et comparer des modèles de langage exécutés localement. Le benchmark sert de cas d’usage pour démontrer la maîtrise de la collecte, des contrôles qualité, de la transformation, de la modélisation, du stockage, de l’automatisation et de la restitution.
 
-Les livrables attendus sont le dépôt GitHub, une application Streamlit et une présentation orale. [Suivi d’avancement](documentation/CURRENT.md) · [Registre des décisions](documentation/DECISIONS.md)
+Le dépôt GitHub et la présentation orale documentent le projet. Les futurs marts Gold serviront à la consommation dans Power BI, Qlik, un environnement de data science ou une application métier. [Suivi d’avancement](documentation/CURRENT.md) · [Registre des décisions](documentation/DECISIONS.md)
 
 ## Architecture des données
 
 | Couche | Rôle et état |
 | --- | --- |
 | Bronze | Données brutes OpenTDB et LLM conservées intactes. |
-| Silver préparé | Sept Parquet validés. Le corpus OpenTDB contient 5 290 lignes × 10 colonnes. Les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct fournissent un Parquet de 5 290 réponses par modèle et par prompt P1, P2 et P3. |
-| Silver consolidé | La table `silver.obt_silver` est matérialisée dans DuckDB. `staging` lit les sept sources. `intermediate` applique un `UNION ALL BY NAME` des six benchmarks, puis un `JOIN` au corpus sur `question_id`. |
-| Gold | Jeux analytiques et agrégations issus de l’OBT, à produire dans `marts` pour Streamlit. |
+| Silver | Sept Parquet validés, préparés par les scripts Python du projet. Le corpus OpenTDB contient 5 290 lignes × 10 colonnes. Les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct fournissent un Parquet de 5 290 réponses par modèle et par prompt P1, P2 et P3. |
+| dbt `staging` et `intermediate` | `staging` expose les sept sources avec leurs types. `intermediate` réunit les six benchmarks par `UNION ALL BY NAME`, puis les joint au corpus par `question_id`. L’OBT détaillée est matérialisée en `intermediate.obt_silver`. |
+| Gold | Marts métier à construire dans le schéma DuckDB `gold`. |
+| Consommation | Les futurs marts alimenteront Power BI, Qlik, la data science ou une application métier. |
 
 L’OBT contient une ligne par question × modèle × prompt, soit **31 740 lignes, 22 colonnes et 5 290 questions distinctes**. L’identifiant de question permet les comparaisons appariées. Les identifiants source, les scores stricts, les statuts et les latences sont conservés, y compris pour les réponses hors format. Les pilotes Bonsai et Qwen et les échecs de transport archivés restent hors de ce périmètre. [Sources Silver et dictionnaire](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
 
@@ -64,7 +65,7 @@ python -m pip install requests pandas
 
 ## Utilisation
 
-### Construire et documenter l’OBT Silver
+### Construire et documenter l’OBT intermédiaire
 
 Les sept Parquet validés doivent être présents aux chemins indiqués dans l’architecture, dont quatre fichiers locaux. Le profil dbt utilise des chemins relatifs à `dbt/`. Depuis la racine du dépôt, avec la `.venv` existante, installer les versions vérifiées et lancer les commandes ci-dessous. [Chemins des sept sources](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
 
@@ -78,7 +79,7 @@ Les sept Parquet validés doivent être présents aux chemins indiqués dans l�
 )
 ```
 
-Le build lit les Parquet et écrit les vues et la table `silver.obt_silver` dans la base locale `data/silver/obt_silver.duckdb`. Pour consulter le lignage, ouvrir `dbt/target/static_index.html` dans le navigateur, rechercher le modèle `obt_silver` et ouvrir **Lineage Graph**. La page montre aussi le catalogue des colonnes et les tests. Les fichiers générés sous `dbt/target/` restent locaux. [Documentation dbt](https://docs.getdbt.com/reference/commands/cmd-docs) · [Dictionnaire de l’OBT](documentation/ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt)
+Le build lit les Parquet et écrit les vues `staging`, la vue d’union et la table `intermediate.obt_silver` dans `data/trivial_pursuit.duckdb`. La base `data/silver/obt_silver.duckdb` porte la table de référence du jalon précédent. Pour consulter le lignage, ouvrir `dbt/target/static_index.html`, rechercher `obt_silver` et ouvrir **Lineage Graph**. La page montre aussi le catalogue des colonnes et les tests. Les fichiers générés sous `dbt/target/` restent locaux. [Documentation dbt](https://docs.getdbt.com/reference/commands/cmd-docs) · [Dictionnaire de l’OBT](documentation/ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt)
 
 ### Examiner la collecte existante
 
@@ -198,8 +199,8 @@ Pour poursuivre avec la collecte complète, rester dans la même session de term
 
 ## Organisation du dépôt
 
-- `data/` accueille les fichiers des couches métier Bronze, Silver et Gold.
-- `dbt/models/staging/` et `dbt/models/intermediate/` contiennent les modèles de préparation et de consolidation Silver. `dbt/models/marts/` accueillera les modèles analytiques Gold. `dbt/tests/` contient les tests SQL de l’OBT.
-- `app/` est réservé à la restitution Streamlit à partir de Gold.
+- `data/bronze/` conserve les données brutes. Les sept Parquet définitifs de `data/silver/` constituent les sources Silver du build. `data/trivial_pursuit.duckdb` reçoit les modèles dbt locaux.
+- `dbt/models/staging/` lit et harmonise les sources Silver. `dbt/models/intermediate/` contient l’union des benchmarks et l’OBT détaillée. `dbt/models/marts/` est réservé aux marts Gold. `dbt/tests/` contient les contrôles SQL.
+- `app/` est réservé à une éventuelle application métier consommant les marts Gold.
 - La [référence technique](documentation/ARCHITECTURE.md) détaille les flux, les formats et le benchmark.
 - Les [consignes pour les agents IA](AGENTS.md) décrivent les règles de collaboration.

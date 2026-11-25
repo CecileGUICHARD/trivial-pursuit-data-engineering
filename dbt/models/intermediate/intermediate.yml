@@ -12,7 +12,7 @@ models:
                 to: ref('stg_opentdb')
                 field: question_id
   - name: obt_silver
-    description: Table Silver consolidée au grain question × modèle × prompt, avec les mesures d’origine.
+    description: Table détaillée du niveau dbt intermediate au grain question × modèle × prompt, issue des Parquet Silver validés.
     columns:
       - name: question_id
         data_type: varchar

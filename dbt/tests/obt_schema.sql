@@ -3,18 +3,21 @@
 {% set obt = ref('obt_silver') %}
 
 with colonnes as (
-    select table_name, column_name, data_type
+    select schema_name, table_name, column_name, data_type
     from duckdb_columns()
-    where database_name = '{{ obt.database }}' and schema_name = '{{ obt.schema }}'
+    where database_name = '{{ obt.database }}'
 ),
 attendues as (
-    select column_name, data_type from colonnes where table_name = '{{ benchmark.identifier }}'
+    select column_name, data_type from colonnes
+    where schema_name = '{{ benchmark.schema }}' and table_name = '{{ benchmark.identifier }}'
     union all
     select column_name, data_type from colonnes
-    where table_name = '{{ corpus.identifier }}' and column_name <> 'question_id'
+    where schema_name = '{{ corpus.schema }}' and table_name = '{{ corpus.identifier }}'
+        and column_name <> 'question_id'
 ),
 observees as (
-    select column_name, data_type from colonnes where table_name = '{{ obt.identifier }}'
+    select column_name, data_type from colonnes
+    where schema_name = '{{ obt.schema }}' and table_name = '{{ obt.identifier }}'
 ),
 manquantes as (
     select * from attendues

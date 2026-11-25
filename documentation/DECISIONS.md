@@ -6,7 +6,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 ## Sommaire
 
-33 décisions recensées · 27 retenues, 2 abandonnées, 3 remplacées et 1 proposée.
+34 décisions recensées · 27 retenues, 2 abandonnées, 4 remplacées et 1 proposée.
 
 | Décision | Statut |
 | --- | --- |
@@ -41,8 +41,9 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 | [DEC-029 · Évaluer Qwen3 4B Instruct comme deuxième modèle](#dec-029--évaluer-qwen3-4b-instruct-comme-deuxième-modèle) | abandonnée |
 | [DEC-030 · Retenir Ministral comme deuxième modèle complet](#dec-030--retenir-ministral-comme-deuxième-modèle-complet) | retenue |
 | [DEC-031 · Archiver les échecs de transport avérés et reprendre les positions non reçues](#dec-031--archiver-les-échecs-de-transport-avérés-et-reprendre-les-positions-non-reçues) | retenue |
-| [DEC-032 · Construire une One Big Table dans le Silver consolidé](#dec-032--construire-une-one-big-table-dans-le-silver-consolidé) | retenue |
+| [DEC-032 · Construire une One Big Table dans le Silver consolidé](#dec-032--construire-une-one-big-table-dans-le-silver-consolidé) | remplacée |
 | [DEC-033 · Préciser le modèle relationnel et le dictionnaire Gold](#dec-033--préciser-le-modèle-relationnel-et-le-dictionnaire-gold) | proposée |
+| [DEC-034 · Appliquer la séparation des couches du cours D42](#dec-034--appliquer-la-séparation-des-couches-du-cours-d42) | retenue |
 
 [Informations manquantes et écarts entre les sources](#informations-manquantes-et-écarts-entre-les-sources)
 
@@ -72,7 +73,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 - **Contexte.** La chaîne doit transformer des données locales en indicateurs SQL et les restituer dans un tableau de bord.
 - **Choix et justification.** Retenir DuckDB pour les lectures Parquet et les traitements SQL locaux, dbt pour organiser les transformations et Streamlit pour la restitution. La première architecture réserve les indicateurs à Gold. La lecture sélective des colonnes Parquet par DuckDB est documentée dès le jalon Bronze.
-- **Conséquences et limites.** DuckDB sert aux contrôles et journaux du projet ainsi qu’à la consolidation Silver. La répartition des modèles dbt entre préparation Silver et publication Gold est précisée par DEC-032. Aucun comparatif avec un autre moteur, orchestrateur SQL ou outil de restitution n’est consigné.
+- **Conséquences et limites.** DuckDB sert aux contrôles et journaux du projet ainsi qu’aux modèles dbt. DEC-034 précise leur place dans le schéma D42 et élargit la consommation des marts à plusieurs usages. Aucun comparatif avec un autre moteur, orchestrateur SQL ou outil de restitution n’est consigné.
 - **Références.** Commits `cdb0286` et `cadb884`. [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
 
 ### DEC-004 · Conserver le Bronze brut et préparer le Silver en Parquet
@@ -336,21 +337,30 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 ### DEC-032 · Construire une One Big Table dans le Silver consolidé
 
-**Statut** retenue.
+**Statut** remplacée par DEC-034 pour le classement de l’OBT et la répartition des responsabilités. La logique de construction et les contrôles restent la référence.
 
 - **Contexte.** Les six exports complets validés de DEC-023 et le corpus OpenTDB sont disponibles séparément. Les comparaisons appariées et les agrégations réutilisent les mêmes jointures et le même grain.
 - **Choix et justification.** Faire lire et typer les sept Parquet par `staging`. Construire l’OBT en DuckDB via `intermediate`, avec `UNION ALL` des six benchmarks puis `JOIN` au corpus sur `question_id`. Garder une ligne par question × modèle × prompt. Conserver les identifiants réels, le scoring strict, les statuts et les latences pour permettre la traçabilité et des indicateurs cohérents.
-- **Conséquences et limites.** L’utilisatrice a validé l’OBT construite, avec 31 740 lignes, 22 colonnes et 27 tests dbt réussis. Les attributs OpenTDB se répètent six fois par question. Le choix de préserver toutes les informations distinctes conduit à fusionner uniquement `question_id`. Les réponses hors format restent incluses. Les pilotes Bonsai et Qwen et les échecs archivés restent hors du périmètre. Les marts dbt produiront les jeux Gold issus de l’OBT, puis Streamlit consommera ces jeux.
-- **Références.** [Décision validée](CURRENT.md#consolidation-silver-validée) · [Résultats de la construction](CURRENT.md#construction-et-contrôles-de-lobt-silver) · [Sources et granularité](ARCHITECTURE.md#sources-du-silver-préparé) · [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
+- **Conséquences et limites.** L’utilisatrice a validé l’OBT construite, avec 31 740 lignes, 22 colonnes et 27 tests dbt réussis. Les attributs OpenTDB se répètent six fois par question. Le choix de préserver toutes les informations distinctes conduit à fusionner uniquement `question_id`. Les réponses hors format restent incluses. Les pilotes Bonsai et Qwen et les échecs archivés restent hors du périmètre. Le plan de ce jalon destinait les futurs jeux Gold à Streamlit.
+- **Références.** Commit `e76715e`. [Décision initiale](CURRENT.md#décision-initiale-de-consolidation) · [Résultats de la construction initiale](CURRENT.md#construction-initiale-et-contrôles-de-lobt)
 
 ### DEC-033 · Préciser le modèle relationnel et le dictionnaire Gold
 
 **Statut** proposée.
 
-- **Contexte.** Le système cible délimite le Silver consolidé et les marts Gold (DEC-032). Le détail des produits analytiques reste à arbitrer.
+- **Contexte.** Le schéma D42 réserve Gold aux marts métier (DEC-034). Le détail des produits analytiques reste à arbitrer.
 - **Proposition et justification.** Préciser le modèle relationnel et le dictionnaire des données Gold. La documentation en vigueur les mentionne comme travaux ouverts et ne consigne aucun schéma détaillé validé.
 - **Conséquences et limites.** Les mesures déjà définies par le protocole constituent la référence pour le futur dictionnaire. Les choix de tables, relations et granularités Gold restent à valider. Aucune variante détaillée de modèle Gold n’est documentée.
 - **Références.** Décision ouverte dès `cadb884`. [Choix à arbitrer](ARCHITECTURE.md#choix-à-arbitrer) · [Mesures](ARCHITECTURE.md#benchmark)
+
+### DEC-034 · Appliquer la séparation des couches du cours D42
+
+**Statut** retenue.
+
+- **Contexte et solutions.** DEC-032 classait l’OBT dans le Silver consolidé. Une orientation intermédiaire prévoyait sa construction directement en Python et DuckDB, en amont de dbt. La clarification D42 remplace cette orientation avant sa mise en œuvre et fixe le point d’entrée de dbt aux sept Parquet validés.
+- **Choix et justification.** Conserver les données brutes en Bronze et les Parquet préparés par Python en Silver. Affecter à dbt `staging` la lecture, le typage et l’harmonisation du Silver, puis à `intermediate` l’union et l’OBT détaillée. Réserver Gold aux marts métier dans DuckDB pour Power BI, Qlik, la data science ou les applications métier. Cette répartition suit le cours et distingue la préparation des sources, les transformations intermédiaires et les produits de consommation.
+- **Conséquences et limites.** L’OBT est matérialisée dans `intermediate.obt_silver`, avec le même grain, les mêmes 22 colonnes et les mêmes valeurs que la table validée à `e76715e`. Les 27 tests ont été réexécutés dans la nouvelle base dbt. Le lignage actif va des sept Parquet à l’OBT. La base et les fichiers du jalon précédent assurent la traçabilité. Les marts métier restent à définir selon DEC-033.
+- **Références.** [Contrôles du reclassement](CURRENT.md#alignement-sur-le-schéma-d42) · [OBT dans dbt intermediate](ARCHITECTURE.md#obt-détaillée-dans-dbt-intermediate) · [Gold et restitution](ARCHITECTURE.md#gold-et-restitution)
 
 ## Informations manquantes et écarts entre les sources
 

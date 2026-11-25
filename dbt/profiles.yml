@@ -3,6 +3,6 @@ trivial_pursuit:
   outputs:
     local:
       type: duckdb
-      path: ../data/silver/obt_silver.duckdb
-      schema: silver
+      path: ../data/trivial_pursuit.duckdb
+      schema: dbt
       threads: 4

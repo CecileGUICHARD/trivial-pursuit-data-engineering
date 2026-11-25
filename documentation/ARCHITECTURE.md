@@ -1,6 +1,6 @@
 # Architecture technique
 
-L’architecture cible relie Open Trivia Database (OpenTDB) à un tableau de bord Streamlit. Le lot 4 a livré les fichiers Silver préparés et les étapes 5 à 7 ont construit la One Big Table (OBT) Silver. Les jeux Gold et l’application restent à construire. [Suivi opérationnel](CURRENT.md) · [Registre des décisions](DECISIONS.md)
+L’architecture suit le schéma du cours D42. Bronze conserve les données brutes, Silver fournit les Parquet préparés par Python, et dbt lit ces fichiers dans `staging` puis construit la One Big Table (OBT) dans `intermediate`. Gold est réservé aux marts métier dans DuckDB. Les futurs consommateurs pourront être Power BI, Qlik, la data science ou une application métier. [Suivi opérationnel](CURRENT.md) · [Registre des décisions](DECISIONS.md)
 
 ## Choix validés
 
@@ -23,10 +23,10 @@ flowchart LR
     Benchmark --> QuestionsStaging[dbt staging · corpus typé]
     Resultats --> ResultatsStaging[dbt staging · benchmarks typés]
     ResultatsStaging --> Union[dbt intermediate · UNION ALL des six benchmarks]
-    Union --> OBT[Silver consolidé · table silver.obt_silver dans DuckDB]
+    Union --> OBT[dbt intermediate · table intermediate.obt_silver]
     QuestionsStaging -->|JOIN sur question_id| OBT
-    OBT --> Gold[Gold · jeux analytiques et agrégations dans dbt marts]
-    Gold --> App[Streamlit]
+    OBT -.-> Gold[Gold · marts métier dans DuckDB]
+    Gold -.-> App[Consommation · Power BI, Qlik, data science, application métier]
 ```
 
 ### Bronze
@@ -92,9 +92,9 @@ Le corpus OpenTDB final et les six résultats complets Gemma 4 E2B et Ministral 
 
 Les six exports complets incluent déjà les mesures Gemma et Ministral réutilisées lors de la reprise. Les fichiers de pilote séparés et les 13 échecs de transport de la table `echecs_transport_reprise` relèvent de la traçabilité. Les pilotes Bonsai et Qwen sont hors du périmètre de l’OBT et des agrégations Gold. Les réponses reçues hors format sont présentes dans l’OBT et comptent comme incorrectes au scoring strict. [Arbitrage du deuxième modèle](CURRENT.md#choix-définitif-du-deuxième-modèle) · [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
 
-### One Big Table du Silver consolidé
+### OBT détaillée dans dbt intermediate
 
-La table `silver.obt_silver` est matérialisée dans la base DuckDB locale `data/silver/obt_silver.duckdb`. Sept vues de `staging` lisent les Parquet déclarés avec `source()`. DuckDB reprend leurs types natifs. La vue `int_benchmark_results` réunit les six vues de benchmark avec `UNION ALL BY NAME`, qui préserve une éventuelle colonne propre à une source et place `NULL` dans les branches où elle est absente. L’OBT référence cette vue et `stg_opentdb` avec `ref()` et fait une jointure interne sur `question_id`. Une seule colonne représente la clé vérifiée commune aux deux côtés. Le schéma observé présente zéro autre collision de noms. [Sources dbt](../dbt/models/staging/sources.yml) · [Modèle de l’OBT](../dbt/models/intermediate/obt_silver.sql)
+La table `intermediate.obt_silver` est matérialisée dans la base locale `data/trivial_pursuit.duckdb`. Sept vues du schéma `staging` lisent les Parquet Silver déclarés avec `source()`. DuckDB conserve leurs types natifs. La vue `intermediate.int_benchmark_results` réunit les six vues de benchmark avec `UNION ALL BY NAME`, qui préserve une éventuelle colonne propre à une source et place `NULL` dans les branches où elle est absente. L’OBT référence cette vue et `staging.stg_opentdb` avec `ref()` et effectue une jointure interne sur `question_id`. La clé commune est fusionnée et le schéma observé présente zéro autre collision de noms. [Sources dbt](../dbt/models/staging/sources.yml) · [Modèle de l’OBT](../dbt/models/intermediate/obt_silver.sql)
 
 La granularité est une ligne par triplet (`question_id`, `model_id`, `prompt_id`). La construction a produit **31 740 lignes et 22 colonnes**, avec six inférences pour chacune des 5 290 questions distinctes. Les identifiants source, les réponses brutes, le scoring strict, les statuts, les latences et les métadonnées techniques sont repris à l’identique.
 
@@ -137,13 +137,13 @@ Les scores `ai_correct` et `format_valid` sont recalculables, `category` corresp
 
 Les tests vérifient les effectifs globaux, les six combinaisons modèle–prompt, la couverture par question, l’unicité du triplet et des UUID, les clés obligatoires et les domaines autorisés. Le test de relation en amont vérifie la présence de chaque `question_id` de benchmark dans le corpus. Le contrôle de schéma compare les noms et les types de l’OBT aux vues sources après fusion de la clé.
 
-Deux tests comparent directement aux Parquet les 13 colonnes de benchmark et les 10 colonnes du corpus, répliquées six fois dans le second cas. Les `EXCEPT ALL` dans les deux sens comparent les valeurs et leur multiplicité, y compris les `NULL`, les listes et leur ordre. Le test de scoring recalcule la conformité et l’exactitude pour comparaison avec les valeurs historiques. [Tests SQL](../dbt/tests/) · [Bilan d’exécution](CURRENT.md#construction-et-contrôles-de-lobt-silver)
+Deux tests comparent directement aux Parquet les 13 colonnes de benchmark et les 10 colonnes du corpus, répliquées six fois dans le second cas. Les `EXCEPT ALL` dans les deux sens comparent les valeurs et leur multiplicité, y compris les `NULL`, les listes et leur ordre. Le test de scoring recalcule la conformité et l’exactitude pour comparaison avec les valeurs historiques. Le reclassement a également été vérifié contre la table de référence `silver.obt_silver` du jalon `e76715e`, conservée dans `data/silver/obt_silver.duckdb`. [Tests SQL](../dbt/tests/) · [Contrôles D42](CURRENT.md#alignement-sur-le-schéma-d42)
 
-La documentation dbt générée expose le graphe des sept sources, des sept vues de staging, de la vue d’union et de l’OBT. Pour ouvrir le graphe, charger `dbt/target/static_index.html` dans un navigateur local, sélectionner `obt_silver` puis ouvrir **Lineage Graph**. [Procédure reproductible](../README.md#construire-et-documenter-lobt-silver)
+La documentation dbt générée expose le graphe des sept sources, des sept vues de staging, de la vue d’union et de l’OBT. Pour ouvrir le graphe, charger `dbt/target/static_index.html` dans un navigateur local, sélectionner `obt_silver` puis ouvrir **Lineage Graph**. [Procédure reproductible](../README.md#construire-et-documenter-lobt-intermédiaire)
 
 ### Gold et restitution
 
-Les couches métier Bronze, Silver et Gold décrivent l’état et l’usage des données. Les dossiers dbt décrivent les étapes de transformation. `dbt/models/staging/` et `dbt/models/intermediate/` préparent et consolident Silver dans DuckDB. `dbt/models/marts/` produira les jeux analytiques et les agrégations Gold à partir de l’OBT Silver. Streamlit consommera les résultats Gold.
+Les scripts Python produisent les Parquet Silver. Le lignage dbt commence à ces fichiers et traverse `staging` puis `intermediate`. Pour la cible locale, la macro de nommage affecte les modèles des dossiers `staging`, `intermediate` et `marts` aux schémas `staging`, `intermediate` et `gold`. `marts` est réservé aux tables métier Gold, seules destinées à la consommation finale. Le build actuel contient huit vues et une table détaillée réparties entre `staging` et `intermediate`. [Nommage des schémas](../dbt/macros/generate_schema_name.sql)
 
 ### Benchmark
 
