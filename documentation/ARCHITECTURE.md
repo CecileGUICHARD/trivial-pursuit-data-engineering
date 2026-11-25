@@ -1,6 +1,6 @@
 # Architecture technique
 
-L’architecture suit le schéma du cours D42. Bronze conserve les données brutes, Silver fournit les Parquet préparés par Python, et dbt lit ces fichiers dans `staging` puis construit la One Big Table (OBT) dans `intermediate`. Gold est réservé aux marts métier dans DuckDB. Les futurs consommateurs pourront être Power BI, Qlik, la data science ou une application métier. [Suivi opérationnel](CURRENT.md) · [Registre des décisions](DECISIONS.md)
+L’architecture suit le schéma du cours D42. Bronze conserve les données brutes, Silver fournit les Parquet préparés par Python, et dbt lit ces fichiers dans `staging` puis construit la One Big Table (OBT) dans `intermediate`. Gold contient les marts métier dans DuckDB. Streamlit consomme ces tables pour restituer le benchmark. [Suivi opérationnel](CURRENT.md) · [Registre des décisions](DECISIONS.md)
 
 ## Choix validés
 
@@ -26,7 +26,7 @@ flowchart LR
     Union --> OBT[dbt intermediate · table intermediate.obt_silver]
     QuestionsStaging -->|JOIN sur question_id| OBT
     OBT --> Gold[Gold · sept tables métier dans DuckDB]
-    Gold -.-> App[Consommation · Power BI, Qlik, data science, application métier]
+    Gold -->|Lecture seule| App[Consommation · dashboard Streamlit]
 ```
 
 ### Bronze
@@ -165,6 +165,12 @@ Des marts spécialisés fixent le grain de chaque usage et gardent les dimension
 
 Les 14 tests Gold vérifient les grains, les volumes et les KPI par rapprochement avec l’OBT. Les tests du lot 8 bis reconstituent les totaux par difficulté à partir des lignes ventilées, vérifient les taux et retrouvent les consensus depuis les réponses conformes incorrectes. Le contrôle des transitions reconstruit les paires par pivot des scores. Les moyennes de latence sont comparées avec une tolérance de `1e-10` seconde pour les calculs flottants. Les 27 tests historiques ont aussi été rejoués. [Résultats du lot 8 bis](CURRENT.md#lot-8-bis--complément-méthodologique-gold) · [Procédure dbt](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
 
+### Dashboard Streamlit
+
+`app/dashboard.py` initialise les quatre onglets. `app/gold.py` lit exclusivement les sept tables `gold` et ferme la connexion DuckDB après chargement. Le cache en mémoire est invalidé quand la taille ou la date de modification de la base change. Les fonctions de `app/views.py` filtrent les lignes au grain des marts et délèguent les graphiques à `app/charts.py`. `app/presentation.py` et `app/dashboard.css` définissent le bandeau, les cartes et la réinitialisation par vue.
+
+Les graphiques utilisent directement les taux, les latences et les écarts Gold. La seule synthèse calculée dans l’interface porte sur les effectifs et proportions des questions filtrées, à partir des classes et indicateurs déjà renseignés dans `mart_question_outcomes`. Les résultats de cet onglet restent fondés sur les six configurations. [Spécification du dashboard](../specifications/DASHBOARD.md) · [Installation et lancement](../README.md#lancer-le-dashboard-streamlit)
+
 ### Benchmark
 
 Le pilote utilise Gemma 4 E2B via l’API `POST /api/v1/chat` de LM Studio. Chaque prompt est exécuté une fois par question, dans l’ordre `pilot_order`, avec des requêtes indépendantes. Les blocs historiques `P1_choices` puis `P2_expert` et le bloc ajouté `P3_expert_advanced` commencent chacun après le même échauffement sur une question synthétique. L’ordre des blocs et le moment de leur exécution peuvent influencer les latences si la température ou la charge du matériel évolue.
@@ -266,7 +272,3 @@ Avant chaque exécution ou reprise, le script compare la configuration de l’in
 Après l’interruption du client HTTP sur P3, le rapprochement avec les journaux LM Studio a confirmé que 13 tentatives sans réponse étaient restées côté client. Une transaction a archivé ces 13 lignes dans `echecs_transport_reprise` et libéré leurs positions pour le segment suivant. Les 13 739 réponses déjà reçues et leurs identifiants ont été repris. Le moteur Vulkan 2.80.1 a été resélectionné avant le rechargement de l’instance.
 
 Les six exports complets sont versionnés sous `data/bronze/benchmark_ministral_lot4/` et `data/silver/benchmark_ministral_lot4/`. Le journal de reprise reste local. `benchmark_ministral.py bilan` relit les deux benchmarks et compare les réponses par `question_id` pour chaque prompt. [Suivi du benchmark](CURRENT.md#benchmark-complet-ministral-du-lot-4)
-
-## Choix à arbitrer
-
-- Outil et modalités de restitution à partir des marts Gold.

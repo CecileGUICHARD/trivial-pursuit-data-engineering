@@ -6,7 +6,7 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 
 ## Sommaire
 
-37 décisions recensées · 30 retenues, 2 abandonnées et 5 remplacées.
+40 décisions recensées · 33 retenues, 2 abandonnées et 5 remplacées.
 
 | Décision | Statut |
 | --- | --- |
@@ -47,6 +47,9 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 | [DEC-035 · Publier tous les Parquet définitifs des benchmarks](#dec-035--publier-tous-les-parquet-définitifs-des-benchmarks) | retenue |
 | [DEC-036 · Matérialiser sept marts spécialisés dans Gold](#dec-036--matérialiser-sept-marts-spécialisés-dans-gold) | retenue |
 | [DEC-037 · Ajouter une référence du hasard et le consensus incorrect dans Gold](#dec-037--ajouter-une-référence-du-hasard-et-le-consensus-incorrect-dans-gold) | retenue |
+| [DEC-038 · Présenter les marts Gold dans Streamlit](#dec-038--présenter-les-marts-gold-dans-streamlit) | retenue |
+| [DEC-039 · Guider l’exploration du dashboard](#dec-039--guider-lexploration-du-dashboard) | retenue |
+| [DEC-040 · Documenter le regroupement exploratoire OpenTDB](#dec-040--documenter-le-regroupement-exploratoire-opentdb) | retenue |
 
 [Informations manquantes et écarts entre les sources](#informations-manquantes-et-écarts-entre-les-sources)
 
@@ -391,6 +394,33 @@ Les décisions suivent l’ordre des jalons attestés. Une date de validation fi
 - **Choix et justification.** Ventiler les difficultés par type et conserver les totaux, avec un taux théorique pondéré par les effectifs réels. Exposer l’écart au hasard et la conformité par type. Identifier le consensus incorrect au niveau de la question lorsque les six configurations donnent la même réponse incorrecte et conforme, selon les champs du scoring strict (DEC-022).
 - **Conséquences et limites.** Les trois classes d’`outcome` restent en vigueur. Le consensus ajoute un indicateur et sa valeur commune dans `all_incorrect`. Son effectif est recalculé depuis l’OBT à chaque build. Les taux du hasard servent de référence théorique de choix uniforme.
 - **Références.** [Grains et calculs Gold](ARCHITECTURE.md#gold-et-restitution) · [Contrôles du lot 8 bis](CURRENT.md#lot-8-bis--complément-méthodologique-gold)
+
+### DEC-038 · Présenter les marts Gold dans Streamlit
+
+**Statut** retenue.
+
+- **Contexte.** Le lot 9 applique le choix de restitution Streamlit (DEC-003) aux sept marts de DEC-036 et aux mesures précisées dans DEC-037.
+- **Choix et justification.** Utiliser Streamlit et Plotly dans la `.venv` du projet. Lire DuckDB en lecture seule, conserver les grains de Gold et appliquer des filtres propres à chaque mart. Pour la difficulté, sélectionner un seul niveau de ventilation. Les questions pièges gardent les six configurations comme référentiel commun.
+- **Conséquences et limites.** La base Gold doit être disponible pour lancer l’application. Les taux et latences proviennent de Gold. Les effectifs et proportions de questions sont calculés sur la sélection, à partir des classifications Gold. La réinitialisation restaure la sélection complète et le choix tous types pour la difficulté.
+- **Références.** [Intégration Streamlit](ARCHITECTURE.md#dashboard-streamlit) · [Spécification et filtres](../specifications/DASHBOARD.md)
+
+### DEC-039 · Guider l’exploration du dashboard
+
+**Statut** retenue après validation visuelle favorable.
+
+- **Contexte.** Le lot 9 a introduit les sept vues Gold dans Streamlit. Le lot 9 bis vise à rendre la première exploration plus intuitive et pédagogique.
+- **Choix et justification.** Introduire chaque axe par une question, rapprocher ses filtres et afficher des valeurs repères issues de la sélection. Privilégier les boutons segmentés pour les listes courtes et réserver les listes déroulantes aux catégories et aux questions. Relier les scores Gold des deux modèles par catégorie pour rendre l’écart visible. Révéler par action la réponse enregistrée et, le cas échéant, le consensus incorrect.
+- **Conséquences et limites.** Le filtre et sa réinitialisation s’appliquent à la vue concernée. Les cartes et les graphiques lisent les mesures Gold au grain de la vue. La fiche reprend les questions et réponses déjà disponibles dans le mart des résultats par question.
+- **Références.** [Refonte du lot 9 bis](CURRENT.md#lot-9-bis--refonte-ergonomique-du-dashboard) · [Vues, filtres et fiche](../specifications/DASHBOARD.md)
+
+### DEC-040 · Documenter le regroupement exploratoire OpenTDB
+
+**Statut** retenue pour l’analyse exploratoire, validée à la clôture des développements.
+
+- **Contexte.** Les catégories OpenTDB ont une granularité hétérogène, particulièrement dans Entertainment et Science.
+- **Choix et justification.** Comparer les catégories d’origine à un regroupement de 24 catégories en 12 familles par requête SQL en lecture seule sur `gold.mart_category`. Pondérer les taux par le nombre de questions et contrôler la sensibilité d’Entertainment au poids de Video Games. Les résultats retrouvent exactement les totaux par configuration. Science se classe quatrième dans les six configurations. Entertainment reste parmi les deux dernières familles même sans Video Games, tandis que l’écart Gemma − Ministral à P3 évolue de 12,45 à 12,24 points de pourcentage.
+- **Conséquences et limites.** L’analyse a laissé intacts les données, le pipeline dbt, les KPI et le dashboard. Les taux dépendent de la composition du corpus. Le grain agrégé limite l’analyse des écarts à une comparaison descriptive. Une hiérarchie famille → catégorie, qui garderait les effectifs et le détail d’origine, constitue une perspective d’amélioration.
+- **Référence.** [Résultats, contrôles et limites](CURRENT.md#analyse-exploratoire-par-familles-opentdb)
 
 ## Informations manquantes et écarts entre les sources
 

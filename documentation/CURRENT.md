@@ -4,6 +4,8 @@ Mis à jour le 25 novembre 2026. Le lot 4 est définitivement clos. L’utilisat
 
 L’utilisatrice a validé l’alignement sur le schéma D42. Les sept Parquet constituent Silver et l’OBT est matérialisée dans `dbt intermediate`. Les sept marts du lot 8 sont publiés au commit `6d17118`. L’utilisatrice a validé le complément méthodologique du lot 8 bis. [Résultats du lot 8 bis](#lot-8-bis--complément-méthodologique-gold)
 
+Les développements techniques sont clos. L’utilisatrice a validé le dashboard Streamlit et ses finitions du lot 9 bis, ainsi que l’analyse exploratoire par familles OpenTDB. [Refonte du lot 9 bis](#lot-9-bis--refonte-ergonomique-du-dashboard) · [Analyse par familles](#analyse-exploratoire-par-familles-opentdb)
+
 ## Travail réalisé
 
 - Debian sous WSL, VS Code et `.venv` opérationnels. Le dépôt GitHub a été initialisé avec le commit `cdb0286` (« Initialisation du projet et extraction Bronze »).
@@ -450,3 +452,36 @@ Dans `data/trivial_pursuit.duckdb`, `mart_difficulty` compte 54 lignes × 9 colo
 Le comptage de l’OBT confirme 308 consensus incorrects parmi les 1 278 questions `all_incorrect`. Ils se répartissent en 207 QCM et 101 vrai/faux. Les autres effectifs restent à 1 379 questions `all_correct` et 2 633 `mixed`.
 
 Le `dbt build` complet en base de vérification a validé 16 modèles et 41 tests, dont les 27 historiques. Le build ciblé dans la base de travail a validé les trois tables modifiées et leurs six tests. Les totaux par difficulté concordent avec la ventilation, les taux et la conformité avec l’OBT, et le consensus avec un comptage indépendant. Les SHA-256 des 86 fichiers Bronze et Silver concordent. L’OBT et les quatre autres marts conservent leurs schémas et toutes leurs valeurs, et les définitions des huit vues restent identiques. La documentation du lignage a été régénérée dans `dbt/target/static_index.html`. [Procédure de reconstruction](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
+
+## Lot 9 · Dashboard Streamlit
+
+Les sept marts totalisent 5 584 lignes. Le dashboard les lit dans `data/trivial_pursuit.duckdb` en lecture seule et présente les 5 290 questions et 31 740 réponses du benchmark dans quatre onglets. Les taux et latences proviennent de Gold. Les effectifs de questions suivent la sélection. [Vues, filtres et mesures](../specifications/DASHBOARD.md) · [Lancement](../README.md#lancer-le-dashboard-streamlit)
+
+| Contrôle | Valeur vérifiée dans l’application |
+| --- | --- |
+| Gemma P1 | 54,12 % de précision, 100,00 % de conformité, 0,463 s |
+| Ministral P3 | 41,25 % de précision, 78,75 % de conformité, 1,092 s |
+| Précision P3−P1 | −2,08 points pour Gemma et −12,51 points pour Ministral |
+| Ministral P3, vrai/faux | 34,60 % de réussite, −15,40 points sous le hasard, 58,05 % de conformité |
+| Questions | 1 379 réussies par les six configurations, 1 278 ratées par les six et 2 633 mixtes |
+| Échecs communs | 308 consensus incorrects (207 QCM et 101 vrai/faux), 970 autres échecs. Part des consensus de 24,10 %. |
+
+Cinq tests automatisés Streamlit couvrent les dimensions des sept marts, les valeurs de référence, les graphiques des sept vues, les filtres, la recherche, les sélections vides et la réinitialisation. Le serveur local a répondu en HTTP 200. Chromium a vérifié la navigation et les interactions sur le dashboard, et les captures ont été inspectées à 1 440 × 1 050 pixels. Les 16 modèles et 41 tests dbt correspondent au jalon Gold validé. Les empreintes SHA-256 des 263 fichiers de `data/` et `dbt/`, base DuckDB comprise, concordent avant et après le lot 9.
+
+## Lot 9 bis · Refonte ergonomique du dashboard
+
+Le bandeau introduit le benchmark et quatre questions guident le parcours. Les filtres courts deviennent des boutons segmentés à choix unique ou multiples selon le grain. Les catégories restent accessibles par liste déroulante. Les cartes présentent des valeurs Gold et les encadrés « À retenir » suivent les filtres de la vue. La comparaison par catégorie propose aussi des points reliés, et les cartes thermiques affichent les taux dans les cellules. La fiche ludique sélectionne une question parmi les résultats filtrés et masque sa réponse jusqu’au clic. [Parcours et filtres](../specifications/DASHBOARD.md) · [Choix de conception](DECISIONS.md#dec-039--guider-lexploration-du-dashboard)
+
+Les cinq tests de non-régression et le test de la fiche interactive passent. Les contrôles couvrent l’exactitude des KPI, les filtres, les sélections vides, la réinitialisation par vue et le retour à une réponse masquée quand la question change. La vérification Chromium à 1 440 pixels de largeur a produit une capture par onglet et contrôlé les filtres, la réinitialisation au clavier, la comparaison par catégorie, la carte thermique, le repère du hasard et la révélation d’une réponse avec consensus. Les SHA-256 des 263 fichiers de `data/` et `dbt/`, base DuckDB comprise, concordent avant et après le lot 9 bis.
+
+Après la validation visuelle, le bandeau présente les six chiffres clés vérifiés dans Gold et indique que les questions originales sont en anglais. Les textes expliquent la sélection de plusieurs boutons, les six configurations et l’unité des écarts. Les mesures sont présentées comme un taux de bonnes réponses et un temps moyen de réponse. La carte de comparaison nomme une hausse, une baisse ou un taux inchangé selon le signe du meilleur écart parmi les résultats filtrés. Les six tests Streamlit existants ont réussi après ces finitions, et le contrôle des empreintes de `data/` et `dbt/` a de nouveau confirmé leur intégrité.
+
+## Analyse exploratoire par familles OpenTDB
+
+L’analyse SQL a porté exclusivement sur `gold.mart_category` dans DuckDB en lecture seule. Elle a réuni les dix catégories préfixées `Entertainment: ` sous Entertainment, puis les catégories Science & Nature, Computers, Mathematics et Gadgets (identifiants 17, 18, 19 et 30) sous Science. Les dix autres catégories sont restées individuelles. Chaque catégorie appartient à une seule des **12 familles**. Le taux de chaque groupe est `100 × SUM(correct_count) / SUM(response_count)`. Pour chacune des six configurations, la somme des familles retrouve exactement les effectifs et les bonnes réponses du mart. Aucune table persistante n’a été créée. L’empreinte de DuckDB concorde avant et après, et l’analyse n’a modifié ni le pipeline ni le dashboard.
+
+- **Science** atteint le quatrième rang dans les six configurations, alors que Science & Nature figure dans le trio de tête des catégories détaillées dans chacune d’elles. À P3, l’avance de Gemma atteint 9,05 points de pourcentage dans la famille, avec 13,54 points en Computers et 1,27 point en Mathematics.
+- **Entertainment** représente 2 803 questions sur 5 290 et se classe parmi les deux dernières familles des six configurations, y compris après retrait de Video Games. Cette catégorie compte 1 186 questions, soit 42,31 % de la famille. Son retrait relève les six taux de 3,37 à 5,34 points de pourcentage. L’écart Gemma − Ministral à P3 passe de 12,45 à 12,24 points.
+- **Comparaison des prompts.** Art arrive en tête pour les deux modèles à P1 et P2, puis Mythology à P3. À P3, Gemma devance Ministral dans les 12 familles et les 24 catégories. Entertainment représente 349 des 571 bonnes réponses supplémentaires de Gemma à P3, soit 61,12 % de l’écart net sur ce prompt.
+
+Les résultats décrivent la composition réelle du corpus OpenTDB. Les effectifs inégaux et parfois faibles rendent les rangs descriptifs. Le mart agrégé ne permet ni de tester les écarts question par question ni de séparer les réponses fausses des réponses hors format. Une future hiérarchie pourrait ajouter une vue de synthèse par famille avec accès aux catégories d’origine et affichage des effectifs à chaque niveau. [Décision exploratoire](DECISIONS.md#dec-040--documenter-le-regroupement-exploratoire-opentdb)

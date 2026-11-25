@@ -4,7 +4,7 @@ Projet du cours D42, ETL et optimisation des architectures de stockage, en M1 Bi
 
 Le projet construit un pipeline reproductible et traçable pour collecter des questions de culture générale, préparer les données et comparer des modèles de langage exécutés localement. Le benchmark sert de cas d’usage pour démontrer la maîtrise de la collecte, des contrôles qualité, de la transformation, de la modélisation, du stockage, de l’automatisation et de la restitution.
 
-Le dépôt GitHub et la présentation orale documentent le projet. Les marts Gold sont prêts pour une future consommation dans Power BI, Qlik, un environnement de data science ou une application métier. [Suivi d’avancement](documentation/CURRENT.md) · [Registre des décisions](documentation/DECISIONS.md)
+Le dashboard Streamlit présente les résultats du benchmark à partir des sept marts Gold. [Suivi d’avancement](documentation/CURRENT.md) · [Registre des décisions](documentation/DECISIONS.md)
 
 ## Architecture des données
 
@@ -14,7 +14,7 @@ Le dépôt GitHub et la présentation orale documentent le projet. Les marts Gol
 | Silver | Sept Parquet validés, préparés par les scripts Python du projet. Le corpus OpenTDB contient 5 290 lignes × 10 colonnes. Les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct fournissent un Parquet de 5 290 réponses par modèle et par prompt P1, P2 et P3. |
 | dbt `staging` et `intermediate` | `staging` expose les sept sources avec leurs types. `intermediate` réunit les six benchmarks par `UNION ALL BY NAME`, puis les joint au corpus par `question_id`. L’OBT détaillée est matérialisée en `intermediate.obt_silver`. |
 | Gold | Sept marts métier matérialisés en tables dans le schéma DuckDB `gold`. |
-| Consommation | Les marts exposent les résultats destinés à Power BI, Qlik, à la data science ou à une application métier. |
+| Consommation | Streamlit présente les résultats des sept marts Gold dans quatre onglets. |
 
 L’OBT contient une ligne par question × modèle × prompt, soit **31 740 lignes, 22 colonnes et 5 290 questions distinctes**. L’identifiant de question permet les comparaisons appariées. Les identifiants source, les scores stricts, les statuts et les latences sont conservés, y compris pour les réponses hors format. Les pilotes Bonsai et Qwen et les échecs de transport archivés restent hors de ce périmètre. [Sources Silver et dictionnaire](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
 
@@ -92,6 +92,17 @@ Le build lit les Parquet et produit les vues `staging`, la vue d’union, `inter
 `mart_difficulty` permet de lire les totaux par difficulté avec `type = 'all'` ou de filtrer `multiple` et `boolean` pour la ventilation. Les totaux pondèrent le taux théorique de réussite au hasard par la répartition des questions. `mart_question_type` expose aussi la conformité par type, et `mart_question_outcomes` repère les questions où les six configurations ont fourni la même réponse incorrecte et conforme. [Résultats du complément méthodologique](documentation/CURRENT.md#lot-8-bis--complément-méthodologique-gold)
 
 Pour consulter le lignage, ouvrir `dbt/target/static_index.html`, rechercher `obt_silver` ou `mart_performance` et ouvrir **Lineage Graph**. La page présente aussi les modèles et les tests. Les fichiers générés sous `dbt/target/` restent locaux. [Documentation dbt](https://docs.getdbt.com/reference/commands/cmd-docs) · [Grains et mesures Gold](documentation/ARCHITECTURE.md#gold-et-restitution)
+
+### Lancer le dashboard Streamlit
+
+Si `data/trivial_pursuit.duckdb` est absente ou ne contient pas les sept marts Gold, suivre d’abord la procédure de reconstruction ci-dessus. Avec la base disponible, lancer depuis la racine du dépôt.
+
+```bash
+.venv/bin/python -m pip install -r app/requirements.txt
+.venv/bin/streamlit run app/dashboard.py --server.headless true --server.address 127.0.0.1 --server.port 8501 --browser.gatherUsageStats false
+```
+
+Ouvrir `http://127.0.0.1:8501`. L’application se connecte à DuckDB en lecture seule. Les contrôles fonctionnels s’exécutent avec `.venv/bin/python -m unittest discover -s app -p 'test_*.py' -v`. [Vues et filtres du dashboard](specifications/DASHBOARD.md)
 
 ### Examiner la collecte existante
 
@@ -213,6 +224,6 @@ Pour poursuivre avec la collecte complète, rester dans la même session de term
 
 - `data/bronze/` conserve les données brutes. Les sept Parquet définitifs de `data/silver/` constituent les sources Silver du build. `data/trivial_pursuit.duckdb` reçoit les modèles dbt locaux.
 - `dbt/models/staging/` lit et harmonise les sources Silver. `dbt/models/intermediate/` contient l’union des benchmarks et l’OBT détaillée. `dbt/models/marts/` contient les sept modèles Gold et leur dictionnaire YAML. `dbt/tests/` contient les contrôles SQL.
-- `app/` est réservé à une éventuelle application métier consommant les marts Gold.
+- `app/` contient le dashboard Streamlit, ses dépendances et ses tests fonctionnels.
 - La [référence technique](documentation/ARCHITECTURE.md) détaille les flux, les formats et le benchmark.
 - Les [consignes pour les agents IA](AGENTS.md) décrivent les règles de collaboration.
