@@ -16,18 +16,34 @@ Ce projet du cours D42, ETL et optimisation des architectures de stockage, a ét
 ## Architecture des données
 
 ```mermaid
-flowchart LR
-    API[OpenTDB] --> CSV[Bronze · questions CSV]
-    CSV --> Corpus[Silver · corpus Parquet]
-    Corpus --> LM[LM Studio · deux modèles et trois prompts]
-    LM --> Mesures[Bronze · six Parquet de mesures]
-    Mesures --> Scores[Silver · six Parquet de résultats]
-    Corpus --> Scores
+flowchart TB
+    subgraph FluxCorpus["Flux 1 · Collecte et corpus"]
+        API[OpenTDB] --> CSV[Bronze · questions CSV]
+        CSV --> Corpus[Silver · corpus Parquet]
+    end
+
+    subgraph FluxBenchmark["Flux 2 · Benchmark"]
+        LM[LM Studio · deux modèles et trois prompts] --> Mesures[Bronze · six Parquet de mesures]
+        Mesures --> Scores[Silver · six Parquet de résultats]
+    end
+
+    Corpus --> LM
+    Corpus -->|Scoring| Scores
     Corpus --> Staging[dbt staging · sept vues]
     Scores --> Staging
     Staging --> Intermediate[dbt intermediate · union et OBT]
-    Intermediate --> Gold[Gold · sept tables DuckDB]
+    Intermediate --> Gold[Gold · sept marts DuckDB]
     Gold --> App[Streamlit · lecture seule]
+
+    classDef bronze fill:#f3dfcf,stroke:#934e2b,stroke-width:2px,color:#492817
+    classDef silver fill:#e4ebf5,stroke:#506780,stroke-width:2px,color:#203447
+    classDef gold fill:#fff0b8,stroke:#8a6600,stroke-width:2px,color:#463300
+    class CSV,Mesures bronze
+    class Corpus,Scores silver
+    class Gold gold
+
+    style FluxCorpus fill:#f8fafc,stroke:#64748b,color:#172033
+    style FluxBenchmark fill:#f8fafc,stroke:#64748b,color:#172033
 ```
 
 Le grain de l’OBT est une ligne par question, modèle et prompt. La clé `question_id` relie les mesures au corpus et permet les comparaisons appariées. [Flux détaillés et dictionnaire](documentation/ARCHITECTURE.md#obt-détaillée-dans-dbt-intermediate)
