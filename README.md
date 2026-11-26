@@ -1,229 +1,135 @@
 # Trivial Pursuit · Benchmark de LLM locaux
 
-Projet du cours D42, ETL et optimisation des architectures de stockage, en M1 Big Data & IA (23 au 26 novembre 2026).
+## Contexte et objectif
 
-Le projet construit un pipeline reproductible et traçable pour collecter des questions de culture générale, préparer les données et comparer des modèles de langage exécutés localement. Le benchmark sert de cas d’usage pour démontrer la maîtrise de la collecte, des contrôles qualité, de la transformation, de la modélisation, du stockage, de l’automatisation et de la restitution.
+Ce projet du cours D42, ETL et optimisation des architectures de stockage, a été réalisé du 23 au 26 novembre 2026 en M1 Big Data & IA. Il démontre les étapes d’un pipeline Data Engineering, de l’extraction au dashboard, en comparant deux modèles de langage locaux sur les mêmes questions de culture générale.
 
-Le dashboard Streamlit présente les résultats du benchmark à partir des sept marts Gold. [Suivi d’avancement](documentation/CURRENT.md) · [Registre des décisions](documentation/DECISIONS.md)
+## Chiffres clés
+
+| Indicateur | Périmètre |
+| --- | --- |
+| Corpus OpenTDB | 5 299 questions collectées, 5 290 retenues sur 24 catégories |
+| Questions évaluées | 4 501 QCM et 789 vrai/faux, en anglais |
+| Benchmark | 2 modèles × 3 prompts × 5 290 questions, soit 31 740 réponses |
+| Modélisation | 1 One Big Table (OBT) de 31 740 lignes × 22 colonnes et 7 marts Gold |
 
 ## Architecture des données
 
-| Couche | Rôle et état |
-| --- | --- |
-| Bronze | Données brutes OpenTDB et LLM conservées intactes. |
-| Silver | Sept Parquet validés, préparés par les scripts Python du projet. Le corpus OpenTDB contient 5 290 lignes × 10 colonnes. Les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct fournissent un Parquet de 5 290 réponses par modèle et par prompt P1, P2 et P3. |
-| dbt `staging` et `intermediate` | `staging` expose les sept sources avec leurs types. `intermediate` réunit les six benchmarks par `UNION ALL BY NAME`, puis les joint au corpus par `question_id`. L’OBT détaillée est matérialisée en `intermediate.obt_silver`. |
-| Gold | Sept marts métier matérialisés en tables dans le schéma DuckDB `gold`. |
-| Consommation | Streamlit présente les résultats des sept marts Gold dans quatre onglets. |
-
-L’OBT contient une ligne par question × modèle × prompt, soit **31 740 lignes, 22 colonnes et 5 290 questions distinctes**. L’identifiant de question permet les comparaisons appariées. Les identifiants source, les scores stricts, les statuts et les latences sont conservés, y compris pour les réponses hors format. Les pilotes Bonsai et Qwen et les échecs de transport archivés restent hors de ce périmètre. [Sources Silver et dictionnaire](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
-
-## Jeux de données disponibles sur GitHub
-
-Télécharger les fichiers ci-dessous depuis GitHub pour les utiliser directement, sans relancer la collecte ni la préparation Silver.
-
-| Fichier | Rôle et statut | Taille |
-| --- | --- | ---: |
-| [`data/bronze/questions_raw.csv`](data/bronze/questions_raw.csv) | Collecte OpenTDB de référence, 5 299 questions et 6 champs bruts | 895 318 octets |
-| [`data/silver/questions_avant_dedoublonnage.parquet`](data/silver/questions_avant_dedoublonnage.parquet) | Jalon de conversion au format Parquet. Conserve les 5 299 lignes et les 6 champs bruts du CSV. | 429 316 octets |
-| [`data/silver/questions_dedoublonnees.parquet`](data/silver/questions_dedoublonnees.parquet) | Jalon dédoublonné selon les quatre arbitrages validés, 5 295 questions et 6 champs bruts | 429 259 octets |
-| [`data/silver/questions_normalisees.parquet`](data/silver/questions_normalisees.parquet) | Jalon normalisé validé, 5 295 questions et 6 champs. Les réponses incorrectes sont stockées sous forme de liste. | 424 385 octets |
-| [`data/silver/questions_clean.parquet`](data/silver/questions_clean.parquet) | Corpus du benchmark révisé, 5 290 questions et 10 colonnes après les cinq exclusions validées. Intègre les huit corrections historiques et quatre champs d’enrichissement. | 966 677 octets |
-| [`data/silver/diagnostic_anglais_lot2.csv`](data/silver/diagnostic_anglais_lot2.csv) | Diagnostic linguistique du jalon normalisé, avec 1 019 propositions de correction et 11 cas à éclaircir | 334 495 octets |
-| [`data/silver/classement_diagnostic_anglais_lot2.csv`](data/silver/classement_diagnostic_anglais_lot2.csv) | Classement des 1 030 entrées du diagnostic par catégorie, risque et modalité de validation, utilisé pour préparer l’arbitrage | 600 327 octets |
-| [`data/silver/rapport_qualite_silver.csv`](data/silver/rapport_qualite_silver.csv) | Rapport de 1 045 entrées avec les décisions historiques et les dix lignes GARDER/EXCLURE des cinq groupes. | 822 814 octets |
-| [`data/bronze/gemma_p1_choices.parquet`](data/bronze/gemma_p1_choices.parquet) | 530 tentatives brutes de Gemma 4 E2B pour `P1_choices` | 54 301 octets |
-| [`data/bronze/gemma_p2_expert.parquet`](data/bronze/gemma_p2_expert.parquet) | 530 tentatives brutes de Gemma 4 E2B pour `P2_expert` | 54 296 octets |
-| [`data/silver/gemma_p1_choices.parquet`](data/silver/gemma_p1_choices.parquet) | 530 résultats structurés pour `P1_choices` | 52 550 octets |
-| [`data/silver/gemma_p2_expert.parquet`](data/silver/gemma_p2_expert.parquet) | 530 résultats structurés pour `P2_expert` | 52 545 octets |
-| [`data/silver/pilot_lot2/pilot_question_ids.parquet`](data/silver/pilot_lot2/pilot_question_ids.parquet) | Manifeste définitif des 530 questions du pilote | 38 037 octets |
-| [`data/silver/pilot_lot2/manifest_metadata.json`](data/silver/pilot_lot2/manifest_metadata.json) | Empreintes du manifeste, du corpus de tirage et du Silver révisé | 991 octets |
-| [`data/bronze/benchmark_lot4/gemma_p1_choices.parquet`](data/bronze/benchmark_lot4/gemma_p1_choices.parquet) | 5 290 mesures brutes du benchmark complet pour `P1_choices` | 502 851 octets |
-| [`data/bronze/benchmark_lot4/gemma_p2_expert.parquet`](data/bronze/benchmark_lot4/gemma_p2_expert.parquet) | 5 290 mesures brutes du benchmark complet pour `P2_expert` | 502 846 octets |
-| [`data/bronze/benchmark_lot4/gemma_p3_expert_advanced.parquet`](data/bronze/benchmark_lot4/gemma_p3_expert_advanced.parquet) | 5 290 mesures brutes Gemma pour `P3_expert_advanced` | 506 618 octets |
-| [`data/silver/benchmark_lot4/gemma_p1_choices.parquet`](data/silver/benchmark_lot4/gemma_p1_choices.parquet) | 5 290 résultats structurés du benchmark complet pour `P1_choices` | 484 464 octets |
-| [`data/silver/benchmark_lot4/gemma_p2_expert.parquet`](data/silver/benchmark_lot4/gemma_p2_expert.parquet) | 5 290 résultats structurés du benchmark complet pour `P2_expert` | 484 459 octets |
-| [`data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet`](data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet) | 5 290 résultats structurés Gemma pour `P3_expert_advanced` | 488 586 octets |
-| [`data/bronze/benchmark_ministral_lot4/ministral_p1_choices.parquet`](data/bronze/benchmark_ministral_lot4/ministral_p1_choices.parquet) | 5 290 mesures brutes Ministral pour `P1_choices` | 503 784 octets |
-| [`data/bronze/benchmark_ministral_lot4/ministral_p2_expert.parquet`](data/bronze/benchmark_ministral_lot4/ministral_p2_expert.parquet) | 5 290 mesures brutes Ministral pour `P2_expert` | 503 972 octets |
-| [`data/bronze/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet`](data/bronze/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet) | 5 290 mesures brutes Ministral pour `P3_expert_advanced` | 522 994 octets |
-| [`data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet`](data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet) | 5 290 résultats structurés Ministral pour `P1_choices` | 485 512 octets |
-| [`data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet`](data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet) | 5 290 résultats structurés Ministral pour `P2_expert` | 486 125 octets |
-| [`data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet`](data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet) | 5 290 résultats structurés Ministral pour `P3_expert_advanced` | 505 538 octets |
-
-Les trois CSV de qualité utilisent le point-virgule comme séparateur. Le diagnostic et son classement documentent les propositions. Le rapport définitif indique celles qui ont été appliquées.
-
-Un clone du dépôt contient les douze Parquet définitifs des benchmarks. Les six exports Silver totalisent 31 740 résultats et fournissent, avec le corpus OpenTDB final, toutes les sources du build dbt. Les journaux DuckDB de reprise, le manifeste d’exécution du lot 4, l’essai historique, les copies du candidat final et les fichiers temporaires restent locaux. [Chemins des sources Silver validées](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
-
-## Source des données
-
-Open Trivia Database fournit une API JSON publique sans clé, sous licence CC BY-SA 4.0. Elle autorise jusqu’à 50 questions par appel, avec un intervalle de 5 secondes entre deux appels d’une même adresse IP. Les jetons de session permettent à l’API de suivre les questions déjà renvoyées pendant la collecte. [Documentation OpenTDB](https://opentdb.com/api_config.php)
-
-Les questions et réponses sont créditées à Open Trivia Database et à ses contributeurs. Les jeux Bronze et Silver et les extraits de ces données dans les rapports sont redistribués sous CC BY-SA 4.0. Bronze conserve les valeurs brutes de l’API. Les jalons Silver documentent la conversion en Parquet, le dédoublonnage, la normalisation, les corrections et l’enrichissement pour le benchmark. En cas de redistribution, conserver l’attribution et le lien vers la licence, signaler les modifications et partager les adaptations sous les mêmes conditions. [Source OpenTDB](https://opentdb.com/api_config.php) · [Licence CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
-
-## Installation sous Debian (WSL)
-
-Depuis la racine du dépôt, créer l’environnement virtuel s’il est absent, puis l’activer. Les scripts de collecte utilisent `requests`. Le pilote et l’exploration utilisent aussi `pandas`.
-
-```bash
-test -d .venv || python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install requests pandas
+```mermaid
+flowchart LR
+    API[OpenTDB] --> CSV[Bronze · questions CSV]
+    CSV --> Corpus[Silver · corpus Parquet]
+    Corpus --> LM[LM Studio · deux modèles et trois prompts]
+    LM --> Mesures[Bronze · six Parquet de mesures]
+    Mesures --> Scores[Silver · six Parquet de résultats]
+    Corpus --> Scores
+    Corpus --> Staging[dbt staging · sept vues]
+    Scores --> Staging
+    Staging --> Intermediate[dbt intermediate · union et OBT]
+    Intermediate --> Gold[Gold · sept tables DuckDB]
+    Gold --> App[Streamlit · lecture seule]
 ```
 
-## Utilisation
+Le grain de l’OBT est une ligne par question, modèle et prompt. La clé `question_id` relie les mesures au corpus et permet les comparaisons appariées. [Flux détaillés et dictionnaire](documentation/ARCHITECTURE.md#obt-détaillée-dans-dbt-intermediate)
+
+## Technologies
+
+Python prépare les données, Parquet conserve les jeux publiés, dbt avec dbt-duckdb construit les modèles SQL et DuckDB stocke les tables analytiques. LM Studio sert les modèles Gemma 4 E2B et Ministral 3 3B Instruct en local. Streamlit et Plotly assurent la restitution.
+
+<a name="utilisation"></a>
+<a name="installation-sous-debian-wsl"></a>
+
+## Reconstruire le projet depuis GitHub
+
+### Prérequis
+
+Prévoir Git, Python 3.13 avec le module `venv` et un accès aux paquets Python pour l’installation. Les commandes ci-dessous utilisent Bash sous Debian, l’environnement de travail de référence sous WSL. Les versions utilisées par dbt et le dashboard sont épinglées dans leurs fichiers de dépendances.
+
+```bash
+git clone https://github.com/CecileGUICHARD/trivial-pursuit-data-engineering.git
+cd trivial-pursuit-data-engineering
+test -d .venv || python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r dbt/requirements.txt -r app/requirements.txt
+```
 
 ### Construire le pipeline dbt et consulter le lignage
 
-Un clone à jour fournit les sept Parquet validés aux chemins utilisés par le projet dbt. Le profil utilise des chemins relatifs à `dbt/`. Depuis la racine du dépôt, avec la `.venv` créée à l’étape d’installation, installer les versions épinglées et lancer les commandes ci-dessous. [Chemins des sept sources](documentation/ARCHITECTURE.md#sources-du-silver-préparé)
+Depuis la racine du dépôt, avec l’environnement activé, lancer le build et générer la documentation. Les chemins du profil et des sources sont relatifs à `dbt/`.
 
 ```bash
-.venv/bin/python -m pip install -r dbt/requirements.txt
 (
   cd dbt &&
-  ../.venv/bin/dbt build --profiles-dir . &&
+  dbt build --profiles-dir . &&
   cp target/run_results.json target/build_run_results.json &&
-  ../.venv/bin/dbt docs generate --profiles-dir . --static
+  dbt docs generate --profiles-dir . --static
 )
 ```
 
-Le build lit les Parquet et produit les vues `staging`, la vue d’union, `intermediate.obt_silver` et les sept marts `gold` dans `data/trivial_pursuit.duckdb`. Avec l’OBT déjà matérialisée, utiliser `../.venv/bin/dbt build --profiles-dir . --select path:models/marts` depuis `dbt/` pour reconstruire les seuls marts, puis `../.venv/bin/dbt test --profiles-dir .` pour contrôler l’ensemble du pipeline.
-
-`mart_difficulty` permet de lire les totaux par difficulté avec `type = 'all'` ou de filtrer `multiple` et `boolean` pour la ventilation. Les totaux pondèrent le taux théorique de réussite au hasard par la répartition des questions. `mart_question_type` expose aussi la conformité par type, et `mart_question_outcomes` repère les questions où les six configurations ont fourni la même réponse incorrecte et conforme. [Résultats du complément méthodologique](documentation/CURRENT.md#lot-8-bis--complément-méthodologique-gold)
-
-Pour consulter le lignage, ouvrir `dbt/target/static_index.html`, rechercher `obt_silver` ou `mart_performance` et ouvrir **Lineage Graph**. La page présente aussi les modèles et les tests. Les fichiers générés sous `dbt/target/` restent locaux. [Documentation dbt](https://docs.getdbt.com/reference/commands/cmd-docs) · [Grains et mesures Gold](documentation/ARCHITECTURE.md#gold-et-restitution)
+Le build crée `data/trivial_pursuit.duckdb`, avec les vues de staging, la vue d’union, l’OBT et les marts Gold. Dans `dbt/target/static_index.html`, chercher `obt_silver` ou `mart_performance` puis ouvrir **Lineage Graph**. Avec l’OBT déjà construite, `dbt build --profiles-dir . --select path:models/marts` reconstruit les seuls marts depuis `dbt/`. `dbt test --profiles-dir .` y relance les contrôles. [Documentation dbt v1](https://docs.getdbt.com/reference/commands/cmd-docs?version=1.12) · [Grains et mesures Gold](documentation/ARCHITECTURE.md#gold-et-restitution)
 
 ### Lancer le dashboard Streamlit
 
-Si `data/trivial_pursuit.duckdb` est absente ou ne contient pas les sept marts Gold, suivre d’abord la procédure de reconstruction ci-dessus. Avec la base disponible, lancer depuis la racine du dépôt.
+Une fois les sept marts construits, lancer depuis la racine du dépôt avec l’environnement activé.
 
 ```bash
-.venv/bin/python -m pip install -r app/requirements.txt
-.venv/bin/streamlit run app/dashboard.py --server.headless true --server.address 127.0.0.1 --server.port 8501 --browser.gatherUsageStats false
+streamlit run app/dashboard.py --server.headless true --server.address 127.0.0.1 --server.port 8501 --browser.gatherUsageStats false
 ```
 
-Ouvrir `http://127.0.0.1:8501`. L’application se connecte à DuckDB en lecture seule. Les contrôles fonctionnels s’exécutent avec `.venv/bin/python -m unittest discover -s app -p 'test_*.py' -v`. [Vues et filtres du dashboard](specifications/DASHBOARD.md)
+Ouvrir [le dashboard local](http://127.0.0.1:8501/).
 
-### Examiner la collecte existante
+## Reconstruction analytique et rejeu intégral
 
-Depuis la racine du dépôt, lancer l’exploration du CSV Bronze versionné.
+- **Reconstruction analytique.** Le clone fournit les sept Parquet Silver validés. Le build dbt et le lancement de Streamlit suffisent pour retrouver le lignage, les indicateurs et le dashboard. Après installation des dépendances, cette procédure fonctionne avec les fichiers du clone, sans accès à OpenTDB ni à LM Studio.
+- **Rejeu intégral.** Il comprend une nouvelle collecte, la préparation du corpus, les inférences et la consolidation. Il requiert l’API OpenTDB, LM Studio, les variantes de modèles et les outils de la campagne. Les scripts de reprise historiques attendent des empreintes et des journaux locaux précis. Une nouvelle collecte peut changer le corpus, et une nouvelle campagne produit ses propres mesures.
 
-```bash
-python exploration.py
-```
+<a name="examiner-la-collecte-existante"></a>
+<a name="préparer-les-questions-silver"></a>
+<a name="produire-le-candidat-silver"></a>
+<a name="protocole-historique-du-pilote-gemma"></a>
+<a name="benchmark-complet-gemma-du-lot-4"></a>
+<a name="reproduire-la-collecte-dans-un-répertoire-dédié"></a>
 
-Le script affiche la volumétrie, la complétude, les répartitions et les questions aux libellés répétés.
+[Commandes historiques de collecte, de préparation Silver et d’inférence](documentation/CURRENT.md#procédures-de-rejeu)
 
-### Préparer les questions Silver
+### Jeux de données disponibles sur GitHub
 
-Avec `.venv` activé, installer DuckDB et convertir le CSV Bronze depuis la racine du dépôt.
+Le dépôt contient le [CSV Bronze](data/bronze/questions_raw.csv), le [corpus Silver définitif](data/silver/questions_clean.parquet), douze Parquet des benchmarks complets et les jalons et rapports qualité publiés. Les six exports Silver des benchmarks et le corpus constituent les sept sources du build. [Chemins des sources](documentation/ARCHITECTURE.md#sources-du-silver-préparé) · [Inventaire des fichiers publiés](documentation/CURRENT.md#inventaire-des-données-publiées)
 
-```bash
-python -m pip install duckdb
-python preparer_silver.py convertir
-```
+### Source des données
 
-La conversion écrit `data/silver/questions_avant_dedoublonnage.parquet` avec toutes les lignes du CSV et les six champs bruts.
+Les questions et réponses proviennent d’Open Trivia Database et de ses contributeurs. Les données OpenTDB redistribuées dans Bronze, Silver et les rapports relèvent de la licence CC BY-SA 4.0. Bronze conserve les valeurs brutes. Les étapes Silver documentent les modifications. En cas de redistribution, conserver l’attribution et le lien vers la licence, signaler les modifications et partager les adaptations sous les mêmes conditions. [Documentation OpenTDB](https://opentdb.com/api_config.php) · [Licence CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 
-Lancer ensuite le dédoublonnage quand le Parquet de conversion est prêt.
+## Dashboard et résultats
 
-```bash
-python preparer_silver.py dedoublonner
-```
+Les quatre onglets comparent les modèles, les prompts, les domaines de connaissance et les questions pièges. Streamlit lit le schéma `gold` en lecture seule. [Vues, filtres et mesures](specifications/DASHBOARD.md)
 
-Cette étape lit le Parquet de conversion, applique les arbitrages validés et écrit `data/silver/questions_dedoublonnees.parquet`. Pour enchaîner les deux étapes, lancer `python preparer_silver.py`. [Arbitrages de dédoublonnage](documentation/CURRENT.md#dédoublonnage-silver)
-
-### Produire le candidat Silver
-
-À partir de `questions_normalisees.parquet` et du classement linguistique, lancer depuis la racine du dépôt.
-
-```bash
-python preparer_silver.py finaliser
-```
-
-La commande reproduit le Parquet candidat et le rapport qualité dans `data/silver/candidat_final_5290/`. Les dix couples identifiant–libellé sont vérifiés avant exclusion. `python preparer_silver.py controler-doublons` contrôle en lecture seule le corpus courant `data/silver/questions_clean.parquet`. [Révision du Silver](documentation/CURRENT.md#révision-du-silver-après-les-cinq-arbitrages)
-
-### Protocole historique du pilote Gemma
-
-La commande historique `preparer_silver.py pilote` reste suspendue. Les deux fichiers suivants proviennent de l’essai antérieur à la finalisation.
-
-| Fichier Silver | Contenu |
-| --- | --- |
-| `questions_benchmark.parquet` | 5 295 questions normalisées, identifiants stables, propositions ordonnées et lettres attendues |
-| `pilot_question_ids.parquet` | 530 identifiants tirés avec la seed 42 par catégorie, difficulté et type, dans l’ordre du pilote |
-
-Les trois prompts utilisent les mêmes 530 questions, toutes issues du Silver révisé. Pour vérifier le manifeste et reproduire les résultats Silver historiques de `P1_choices` et `P2_expert` à partir des Parquet Bronze, lancer avec `.venv` activé.
-
-```bash
-python pilote_gemma.py manifeste
-python pilote_gemma.py structurer
-```
-
-Ces commandes fonctionnent hors ligne avec les fichiers versionnés. Avec le journal local, `python pilote_gemma.py reconstruire-bronze` reproduit aussi les exports Bronze et `python pilote_gemma.py bilan` affiche les métriques et les durées actives.
-
-Pour une collecte autorisée ou une reprise, démarrer le serveur local LM Studio et relever sa version et le moteur sélectionné. Le script détecte Gemma 4 E2B et le charge à 4 096 tokens si aucune instance de ce modèle n’est chargée. Si une instance utilise déjà un autre contexte, charger une instance dédiée à 4 096 tokens avec `lms load google/gemma-4-e2b --identifier gemma-pilote-lot3 --context-length 4096`.
-
-```bash
-python pilote_gemma.py executer --lm-studio-version '0.4.28+2' \
-  --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1'
-```
-
-Adapter les versions à l’installation utilisée. Avec le serveur Windows et le client WSL, ajouter `--curl /mnt/c/Windows/System32/curl.exe` si le port est accessible côté Windows uniquement. La reprise réutilise le journal local et la même configuration. Chaque export périodique enregistre d’abord le Bronze, puis produit le Silver correspondant. Le lot 4 et le choix de Ministral comme deuxième modèle ont été validés. [Protocole détaillé](documentation/ARCHITECTURE.md#benchmark) · [Clôture du lot 4](documentation/CURRENT.md#clôture-du-lot-4)
-
-### Benchmark complet Gemma du lot 4
-
-Le benchmark complet de Gemma 4 E2B couvre les **5 290 mêmes questions pour chacun des trois prompts**. Chaque prompt réutilise 530 mesures du pilote et ajoute 4 760 nouvelles mesures. Les Parquet Silver sont lisibles dans DuckDB et alimentent l’OBT. [Comparatif Gemma–Ministral](documentation/CURRENT.md#comparaison-avec-gemma)
-
-| Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
+| Taux de bonnes réponses | P1 · Consigne simple | P2 · Rôle d’expert | P3 · Expert et analyse |
 | --- | ---: | ---: | ---: |
-| Réponses correctes | 2 863 (54,12 %) | 2 852 (53,91 %) | 2 753 (52,04 %) |
-| Réponses conformes | 5 290 (100 %) | 5 290 (100 %) | 5 235 (98,96 %) |
-| Erreurs techniques | 0 | 0 | 0 |
-| Latence moyenne | 0,463 s | 0,466 s | 0,522 s |
-| Latence médiane | 0,448 s | 0,445 s | 0,491 s |
-| Durée active avec le pilote | 49 min 49 s | 51 min 35 s | 55 min 41 s |
+| Gemma 4 E2B | 54,12 % | 53,91 % | 52,04 % |
+| Ministral 3 3B Instruct | 53,76 % | 52,53 % | 41,25 % |
 
-Les commandes ci-dessous documentent la préparation et l’exécution à partir du journal local. `P1_choices` puis `P2_expert` ont traité les questions restantes dans l’ordre du Silver révisé. P3 a repris le même ordre lors de son propre bloc. [Bilan détaillé](documentation/CURRENT.md#comparaison-complète-des-trois-prompts)
+P1 donne le meilleur taux de réussite aux deux modèles. De P1 à P3, Gemma perd 2,08 points et Ministral 12,51 points. La conformité de Ministral passe de 99,77 % à 78,75 %. Gemma répond plus vite sur chacun des trois prompts dans les conditions mesurées. Sur les 5 290 questions, 308 reçoivent la même réponse incorrecte et conforme dans les six configurations. [Résultats détaillés](documentation/CURRENT.md#comparaison-avec-gemma) · [Référence du hasard et consensus](documentation/CURRENT.md#lot-8-bis--complément-méthodologique-gold)
 
-```bash
-python benchmark_gemma.py preparer
-python benchmark_gemma.py verifier --lm-studio-version '0.4.28+2' \
-  --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1'
-python benchmark_gemma.py executer --lm-studio-version '0.4.28+2' \
-  --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1'
-```
+## Qualité, reproductibilité et limites
 
-Sous WSL avec LM Studio sur Windows, passer les chemins de `lms.exe` et `curl.exe` via `--lms` et `--curl`. L’exécution vérifie la configuration et le moteur avant chaque reprise. `python benchmark_gemma.py bilan` lit les indicateurs du journal local lorsque celui-ci est fermé.
-
-La reprise P3 utilise le manifeste complet du lot 4 et les 530 mesures de son propre pilote. Les Parquet P3 complets sont versionnés sous le nom `gemma_p3_expert_advanced.parquet` dans `data/bronze/benchmark_lot4/` et `data/silver/benchmark_lot4/`.
-
-```bash
-python benchmark_gemma.py executer --p3 --lm-studio-version '0.4.28+2' \
-  --runtime 'llama.cpp-win-x86_64-vulkan-avx2@2.80.1' --lms lms.exe --curl curl.exe
-python benchmark_gemma.py bilan --p3
-```
-
-### Reproduire la collecte dans un répertoire dédié
-
-Les deux scripts de collecte écrivent dans `data/bronze/questions_raw.csv`. Utiliser une copie des scripts dans un répertoire distinct pour préserver la collecte d’origine. Avec `.venv` activé, exécuter depuis la racine du dépôt.
-
-```bash
-repertoire_collecte="$(mktemp -d)" &&
-cp collect_opentdb.py collect_opentdb_complet.py exploration.py "$repertoire_collecte/" &&
-(cd "$repertoire_collecte" && python collect_opentdb.py)
-```
-
-Pour poursuivre avec la collecte complète, rester dans la même session de terminal. Le script complet sauvegarde le pilote dans `questions_test_50.csv`, puis écrit le CSV complet et conserve un état de reprise local.
-
-```bash
-(cd "${repertoire_collecte:?Répertoire de collecte requis}" &&
- python collect_opentdb_complet.py && python exploration.py)
-```
+- Le dernier build complet documenté valide 16 modèles et 41 tests dbt. Les contrôles vérifient les clés, la couverture, le scoring strict et la concordance entre les Parquet, l’OBT et les marts. Six tests Streamlit ont réussi lors des finitions du dashboard. Leur commande est `python -m unittest discover -s app -p 'test_*.py' -v` depuis la racine, avec la base et l’environnement prêts. [État des validations](documentation/CURRENT.md#contrôles-qualité-effectués)
+- Les six configurations partagent les mêmes questions et les mêmes choix ordonnés. Une réponse reçue hors format compte comme incorrecte et la conformité est mesurée séparément. [Protocole](documentation/ARCHITECTURE.md#benchmark)
+- Les résultats décrivent ce corpus et une réponse par question et par configuration. Les effectifs varient selon les catégories, certains libellés sont ambigus et les latences dépendent de la machine et des conditions de mesure. [Limites documentées](documentation/CURRENT.md#limites-et-vérifications-restantes)
 
 ## Organisation du dépôt
 
-- `data/bronze/` conserve les données brutes. Les sept Parquet définitifs de `data/silver/` constituent les sources Silver du build. `data/trivial_pursuit.duckdb` reçoit les modèles dbt locaux.
-- `dbt/models/staging/` lit et harmonise les sources Silver. `dbt/models/intermediate/` contient l’union des benchmarks et l’OBT détaillée. `dbt/models/marts/` contient les sept modèles Gold et leur dictionnaire YAML. `dbt/tests/` contient les contrôles SQL.
-- `app/` contient le dashboard Streamlit, ses dépendances et ses tests fonctionnels.
-- La [référence technique](documentation/ARCHITECTURE.md) détaille les flux, les formats et le benchmark.
-- Les [consignes pour les agents IA](AGENTS.md) décrivent les règles de collaboration.
+| Emplacement | Contenu |
+| --- | --- |
+| `data/bronze/`, `data/silver/` | Sources brutes et jeux préparés versionnés |
+| `dbt/` | Modèles `staging`, `intermediate` et `marts`, tests SQL et profil local |
+| `app/` | Dashboard, dépendances et tests Streamlit |
+| Scripts Python à la racine | Collecte, exploration, préparation Silver, pilotes et benchmarks |
+| `documentation/`, `specifications/` | Référence technique, suivi, décisions et spécification du dashboard |
+
+## Documentation détaillée
+
+- [Architecture technique, dictionnaire et protocole](documentation/ARCHITECTURE.md)
+- [État définitif et historique des réalisations](documentation/CURRENT.md)
+- [Registre des décisions et de leurs justifications](documentation/DECISIONS.md)
+- [Spécification du dashboard](specifications/DASHBOARD.md) · [Consignes du dépôt](AGENTS.md)

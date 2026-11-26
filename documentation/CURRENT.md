@@ -1,19 +1,85 @@
 # État d’avancement
 
-Mis à jour le 25 novembre 2026. Le lot 4 est définitivement clos. L’utilisatrice a validé les benchmarks Gemma 4 E2B et Ministral 3 3B Instruct ainsi que leur comparaison sur les mêmes 5 290 questions pour `P1_choices`, `P2_expert` et `P3_expert_advanced`.
+Mise à jour du 26 novembre 2026. **Développements terminés. Préparation de la soutenance.**
 
-L’utilisatrice a validé l’alignement sur le schéma D42. Les sept Parquet constituent Silver et l’OBT est matérialisée dans `dbt intermediate`. Les sept marts du lot 8 sont publiés au commit `6d17118`. L’utilisatrice a validé le complément méthodologique du lot 8 bis. [Résultats du lot 8 bis](#lot-8-bis--complément-méthodologique-gold)
+- [État définitif du projet](#état-définitif-du-projet)
+- [Historique des réalisations](#historique-des-réalisations)
+- [Procédures de rejeu](#procédures-de-rejeu)
 
-Les développements techniques sont clos. L’utilisatrice a validé le dashboard Streamlit et ses finitions du lot 9 bis, ainsi que l’analyse exploratoire par familles OpenTDB. [Refonte du lot 9 bis](#lot-9-bis--refonte-ergonomique-du-dashboard) · [Analyse par familles](#analyse-exploratoire-par-familles-opentdb)
+## État définitif du projet
 
-## Travail réalisé
+### Périmètre livré
+
+La collecte, la préparation Silver, les benchmarks Gemma et Ministral, la modélisation dbt et le dashboard Streamlit sont terminés. L’alignement D42, le complément Gold, les finitions du dashboard et l’analyse exploratoire par familles ont été validés.
+
+| Étape | Livrable |
+| --- | --- |
+| Bronze | CSV OpenTDB brut de 5 299 questions et six Parquet de mesures définitives, par modèle et prompt |
+| Silver | Corpus révisé de 5 290 questions × 10 colonnes, dont 4 501 QCM et 789 vrai/faux sur 24 catégories. Six Parquet de benchmark de 5 290 réponses chacun. |
+| dbt dans DuckDB | Sept vues `staging`, la vue d’union `intermediate.int_benchmark_results` et la table `intermediate.obt_silver` de 31 740 lignes × 22 colonnes, au grain question × modèle × prompt |
+| Gold et dashboard | Sept marts totalisant 5 584 lignes dans le schéma `gold`. Quatre onglets Streamlit alimentés en lecture seule. |
+
+Le clone permet de reconstruire la base locale depuis les sept Parquet Silver validés. Les journaux et manifestes d’exécution locaux documentent la reprise historique. [Sources et dictionnaire](ARCHITECTURE.md#sources-du-silver-préparé) · [Inventaire des fichiers publiés](#inventaire-des-données-publiées) · [Reconstruction dbt](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
+
+<a name="comparaison-avec-gemma"></a>
+
+### Résultats des benchmarks
+
+Les six configurations couvrent les mêmes 5 290 questions avec les mêmes choix dans le même ordre. Le scoring strict compte toute sortie hors format comme incorrecte. Dans la dernière colonne, « seul correct » désigne une question réussie par le modèle de la ligne et ratée par l’autre au même prompt. [Protocole](ARCHITECTURE.md#benchmark)
+
+| Modèle et prompt | Correctes | Incorrectes conformes | Hors format | Réussite | Conformité | Latence moyenne | Seul correct |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Gemma P1 | 2 863 | 2 427 | 0 | 54,12 % | 100,00 % | 0,463 s | 831 |
+| Gemma P2 | 2 852 | 2 438 | 0 | 53,91 % | 100,00 % | 0,466 s | 884 |
+| Gemma P3 | 2 753 | 2 482 | 55 | 52,04 % | 98,96 % | 0,522 s | 1 239 |
+| Ministral P1 | 2 844 | 2 434 | 12 | 53,76 % | 99,77 % | 0,736 s | 812 |
+| Ministral P2 | 2 779 | 2 408 | 103 | 52,53 % | 98,05 % | 0,733 s | 811 |
+| Ministral P3 | 2 182 | 1 984 | 1 124 | 41,25 % | 78,75 % | 1,092 s | 668 |
+
+- **Effet de P3 par rapport à P1.** Gemma gagne 313 paires et en perd 423 (−2,08 points). Ministral en gagne 155 et en perd 817 (−12,51 points). Sur les vrai/faux, Ministral P3 atteint 34,60 % de réussite et 58,05 % de conformité, soit 15,40 points sous le hasard pour la réussite. [Référence du hasard](#lot-8-bis--complément-méthodologique-gold)
+- **Résultats par question.** Les six configurations réussissent 1 379 questions et en ratent 1 278. Les 2 633 autres présentent des résultats mixtes. Parmi les 1 278 échecs communs, 308 sont des consensus incorrects (207 QCM et 101 vrai/faux), soit 24,10 %. Les 970 autres échecs communs correspondent aux autres cas de la classe `all_incorrect`. [Définition du consensus](ARCHITECTURE.md#gold-et-restitution)
+- **Complétude.** Les 31 740 réponses finales ont été reçues, dont 1 294 hors format. Les 13 échecs de transport P3 de Ministral ont été archivés localement et leurs positions terminées à la reprise. [Incident et audit](#benchmark-complet-ministral-du-lot-4)
+
+### Contrôles qualité effectués
+
+| Périmètre | Vérifications attestées |
+| --- | --- |
+| Collecte et Silver | Complétude, relecture des fichiers, revue des doublons et de la langue, comparaison des valeurs conservées, reproductibilité des identifiants et des choix ordonnés |
+| Benchmarks | Égalité des jeux de questions et de l’ordre, unicité des identifiants d’inférence, concordance journal–Bronze–Silver, recalcul du scoring et audit de l’indépendance conversationnelle côté LM Studio |
+| dbt | Dernier build complet documenté avec 16 modèles et 41 tests validés, dont 27 pour les sources et l’OBT et 14 pour Gold. Contrôles de grain, couverture, valeurs, scoring, mesures Gold, référence du hasard et consensus. |
+| Dashboard | Six tests Streamlit réussis au jalon des finitions du lot 9 bis. Vérifications Chromium sur les quatre onglets, les filtres et la fiche interactive. Contrôle SHA-256 de 263 fichiers de `data/` et `dbt/`, dont DuckDB, pendant les lots 9 et 9 bis. |
+
+Les résultats et le périmètre des contrôles figurent dans les étapes correspondantes. [Qualité de l’OBT](#alignement-sur-le-schéma-d42) · [Qualité Gold](#lot-8-bis--complément-méthodologique-gold) · [Vérifications du dashboard](#lot-9-bis--refonte-ergonomique-du-dashboard)
+
+### Derniers jalons GitHub
+
+| Commit | Jalon |
+| --- | --- |
+| `917fbe1` | Clôture des inférences et du comparatif Gemma–Ministral |
+| `e76715e` puis `0b1080c` | Première OBT, puis reclassement dans `dbt intermediate` selon D42 |
+| `7169dbb` | Publication des douze Parquet définitifs de benchmark |
+| `6d17118` puis `cceaa05` | Sept marts Gold, puis référence du hasard et consensus incorrect |
+| `51537fe` | Dashboard finalisé et analyse exploratoire par familles OpenTDB |
+| [`d51977b`](https://github.com/CecileGUICHARD/trivial-pursuit-data-engineering/commit/d51977b) intégré par [`ca4706c`](https://github.com/CecileGUICHARD/trivial-pursuit-data-engineering/commit/ca4706c) | Pull request de la collègue sur la palette du dashboard. Gemma est en turquoise, Ministral en orange. |
+
+### Limites et vérifications restantes
+
+Les taux décrivent le corpus OpenTDB préparé, avec des effectifs inégaux selon les catégories et quelques libellés ambigus signalés dans le rapport qualité. Le scoring mesure à la fois l’exactitude et la capacité à respecter le format. Une seule réponse a été mesurée par triplet, ce qui laisse la stabilité entre répétitions hors du protocole exécuté. Les latences incluent le trajet HTTP local et dépendent du matériel, du moteur et des conditions de passage. [Rapport qualité](../data/silver/rapport_qualite_silver.csv) · [Mesures et dénominateurs](ARCHITECTURE.md#benchmark) · [Limites de l’analyse par familles](#analyse-exploratoire-par-familles-opentdb)
+
+Les validations techniques ci-dessus sont celles des jalons documentés. Elles précèdent l’intégration de la palette. Le contrôle restant pour la soutenance est une répétition du parcours examinateur depuis un clone propre, avec reconstruction de la base et ouverture du dashboard sur l’environnement de présentation. [Procédure depuis GitHub](../README.md#reconstruire-le-projet-depuis-github)
+
+## Historique des réalisations
+
+### Collecte et préparation du corpus
+
+#### Travail réalisé
 
 - Debian sous WSL, VS Code et `.venv` opérationnels. Le dépôt GitHub a été initialisé avec le commit `cdb0286` (« Initialisation du projet et extraction Bronze »).
 - Le pilote du 23 novembre a collecté 50 questions sur 15 catégories, dont 43 QCM et 7 questions vrai/faux. Il compte 15 questions faciles, 19 intermédiaires et 16 difficiles. Les six champs sont renseignés et les libellés sont uniques. Le CSV pilote est conservé localement dans `data/bronze/questions_test_50.csv`. Il sert à vérifier le fonctionnement de la collecte.
 - La collecte complète du 23 novembre est disponible dans `data/bronze/questions_raw.csv`. Son fichier de reprise reste ignoré par Git. Les contrôles d’exploration ont été rejoués le 24 novembre.
-- Les dossiers `data/silver/`, `dbt/` et `app/` structurent les données préparées, les transformations et la restitution prévue. [README](../README.md) · [Référence technique](ARCHITECTURE.md)
+- Les répertoires `data/silver/`, `dbt/` et `app/` ont été créés pour les données préparées, les transformations et la restitution. [README](../README.md) · [Référence technique](ARCHITECTURE.md)
 
-## Contrôles Bronze du 23 novembre (collecte complète)
+#### Contrôles Bronze du 23 novembre (collecte complète)
 
 | Contrôle | Résultat |
 | --- | --- |
@@ -28,17 +94,17 @@ Les développements techniques sont clos. L’utilisatrice a validé le dashboar
 
 L’empreinte SHA-256 de `data/bronze/questions_raw.csv` est `cd2b093512002f0e58c0c9f04fb1bc84ee7168d86c7b6e1f8e4d4a1f60e73d99`.
 
-## Diagnostic avant Silver
+#### Diagnostic avant Silver
 
 Une simulation en mémoire du décodage HTML, de la normalisation Unicode NFC et du retrait des espaces en bord de champ conserve 5 299 lignes distinctes. Les 4 510 QCM ont chacun quatre choix distincts. Les 789 questions vrai/faux ont chacune les choix `True` et `False`. Aucun champ vide n’a été relevé après ces transformations. Le pilote de 50 questions passe les mêmes contrôles et ne contient aucun libellé répété.
 
 La comparaison des libellés nettoyés sans tenir compte de la casse retrouve les quatre paires détectées par `exploration.py` sur les libellés bruts.
 
-## Conversion Parquet avant dédoublonnage
+#### Conversion Parquet avant dédoublonnage
 
 `preparer_silver.py convertir` écrit `data/silver/questions_avant_dedoublonnage.parquet`. La relecture avec DuckDB a confirmé l’égalité des 5 299 lignes et des six colonnes avec le CSV, dont les huit lignes qui partagent quatre libellés.
 
-## Dédoublonnage Silver
+#### Dédoublonnage Silver
 
 `preparer_silver.py dedoublonner` lit le Parquet de conversion et conserve une ligne par paire pour donner le même poids à chaque libellé dans le benchmark. Les numéros de ligne Bronze incluent l’en-tête du CSV. Le script reconnaît les variantes par leurs valeurs.
 
@@ -53,7 +119,7 @@ Le jalon archivé dans `data/silver/questions_dedoublonnees.parquet` contient 5 
 
 Un essai dans un répertoire temporaire a reproduit les 5 295 lignes à partir du seul Parquet de conversion. Un second essai a vérifié le signalement d’une paire sans arbitrage validé.
 
-## Étapes 2 à 5 de Silver validées
+#### Étapes 2 à 5 de Silver validées
 
 `.venv/bin/python preparer_silver.py normaliser` lit le jalon dédoublonné, désormais nommé `data/silver/questions_dedoublonnees.parquet`, et écrit `data/silver/questions_normalisees.parquet`. Les effectifs portent sur le Parquet relu lors de la validation de la normalisation. Chaque réponse incorrecte compte comme une valeur textuelle.
 
@@ -72,7 +138,7 @@ La comparaison des deux Parquet ligne par ligne dans DuckDB confirme le même or
 
 Lors de la normalisation, les empreintes SHA-256 des fichiers Bronze et Silver préexistants concordaient avant et après l’exécution. L’empreinte du jalon dédoublonné avant son archivage était `619d09d8a553bdc33625954fac1912bac29e0fae454cc7adc049f3a098abe8af`. Celle du jalon normalisé validé était `5434aa0bea5441f11e66882ec666d86479b34399bbfe9b03e8ddb68253238ee7`.
 
-## Inventaire des fichiers Silver
+#### Inventaire des fichiers Silver
 
 Les dimensions ont été relues dans les métadonnées des fichiers existants. La colonne « Génération » indique les commandes historiques.
 
@@ -87,9 +153,9 @@ Les dimensions ont été relues dans les métadonnées des fichiers existants. L
 | `candidat_final_5290/questions_clean.parquet` | 5 290 × 10 | Corpus enrichi après les cinq arbitrages de doublons. | `preparer_silver.py finaliser` | Candidat reproductible. |
 | `questions_clean.parquet` | 5 290 × 10 | Corpus Silver courant pour le benchmark. | Publication du candidat après accord explicite. | Livrable Silver révisé. |
 
-## Constats sur l’essai provisoire
+#### Constats sur l’essai provisoire
 
-L’essai a vérifié l’unicité des identifiants et des libellés normalisés, le nombre et l’unicité des choix, ainsi que la correspondance de la lettre attendue avec la bonne réponse. Les empreintes des fichiers Bronze et des deux Parquet Silver d’entrée concordaient avant et après l’essai. Ces vérifications techniques portent sur cet essai.
+Cet essai a été remplacé par le [manifeste validé du pilote Gemma](#pilote-gemma-4-e2b-sur-le-silver-définitif). Il a vérifié l’unicité des identifiants et des libellés normalisés, le nombre et l’unicité des choix, ainsi que la correspondance de la lettre attendue avec la bonne réponse. Les empreintes des fichiers Bronze et des deux Parquet Silver d’entrée concordaient avant et après l’essai. Ces vérifications techniques portent sur cet essai.
 
 Le manifeste provisoire compte 530 identifiants distincts, soit 10,01 % du dataset de l’essai. La répartition conjointe couvre 109 des 141 strates. L’effectif de chaque strate s’écarte de son quota théorique de moins d’une question.
 
@@ -101,7 +167,7 @@ Le manifeste provisoire compte 530 identifiants distincts, soit 10,01 % du datas
 
 Deux reproductions dans un répertoire temporaire avec les lignes du Silver source inversées ont produit les mêmes données préparées et les mêmes identifiants dans le même ordre. La chaîne complète rejouée sur une copie du CSV Bronze a donné le même résultat. Le SHA-256 des identifiants ordonnés, séparés et terminés par un saut de ligne LF, est `1512db3e5929a74a7fe7cce4374789e29906fc23680e9eebec4e300574878122`.
 
-## Diagnostic linguistique du lot 2
+#### Diagnostic linguistique du lot 2
 
 Le 24 novembre 2026, le contrôle a porté sur les 24 897 textes du jalon Silver validé, soit 5 295 questions, 5 295 bonnes réponses et 14 307 réponses incorrectes. La relecture intégrale a été complétée par Hunspell avec des dictionnaires anglais américain et britannique, et par LanguageTool 6.6. Le [rapport de validation](../data/silver/diagnostic_anglais_lot2.csv) contient 1 019 propositions pour 932 lignes et 11 cas à éclaircir. Il indique le rang Silver à partir de 1 et la ligne Bronze en comptant l’en-tête du CSV. Chaque proposition présente le champ, le texte d’origine, le texte proposé et la justification.
 
@@ -109,11 +175,11 @@ Le contrôle de référence a trouvé zéro doublon strict sur les six colonnes 
 
 Le [classement initial](../data/silver/classement_diagnostic_anglais_lot2.csv) conserve les identifiants et les avant/après proposés. Il compte 570 propositions dans les trois groupes, 403 propositions à examiner individuellement, 46 retouches stylistiques ou factuelles et 11 cas à éclaircir en plus des 1 019 propositions. L’arbitrage final a été limité aux anomalies prioritaires.
 
-## Candidat Silver après arbitrage
+#### Candidat Silver après arbitrage
 
 L’accord couvre six libellés (`S00646-q`, `S01104-q`, `S02234-q`, `S02686-q`, `S03037-q`, `S04170-q`) et deux bonnes réponses (`S03139-c`, `H20` → `H2O`, et `S03184-c`, `Cascading Style Sheet` → `Cascading Style Sheets`). L’ordre des lignes et des distracteurs dans les six champs source est conservé. Aucune question n’a été exclue.
 
-`.venv/bin/python -B preparer_silver.py finaliser` a écrit et relu le [Parquet candidat](../data/silver/candidat_final/questions_clean.parquet) ainsi que le [rapport qualité](../data/silver/candidat_final/rapport_qualite_silver.csv). Le rapport contient les 1 030 entrées du classement initial et cinq propositions de l’arbitrage final sur des champs associés. Les décisions se répartissent en 8 appliquées, 1 018 non retenues et 9 laissées en l’état. Les avant/après sont rattachés au rang Silver initial, à la ligne Bronze et au `question_id` du candidat.
+`.venv/bin/python -B preparer_silver.py finaliser` a écrit et relu `questions_clean.parquet` et `rapport_qualite_silver.csv` dans `data/silver/candidat_final/` (fichiers locaux). Le rapport contient les 1 030 entrées du classement initial et cinq propositions de l’arbitrage final sur des champs associés. Les décisions se répartissent en 8 appliquées, 1 018 non retenues et 9 laissées en l’état. Les avant/après sont rattachés au rang Silver initial, à la ligne Bronze et au `question_id` du candidat.
 
 | Contrôle exécuté | Résultat |
 | --- | --- |
@@ -132,23 +198,25 @@ La colonne `limite_benchmark` du rapport documente 22 rangs signalés. Le corpus
 
 L’empreinte SHA-256 mesurée avant la publication était `0274c8a547a78b4a6673dca152144988403d9a1cd1b6425ebba33d1e349da736`.
 
-## Publication du Silver définitif
+#### Publication du Silver définitif
 
-Le 24 novembre 2026, l’utilisatrice a donné sa validation définitive au candidat de 5 295 lignes × 10 colonnes et accepté l’écart résiduel des effectifs du rapport qualité comme non bloquant. Le fichier validé a été publié par copie et remplacement atomique. Le rapport a été repris tel quel avec les décisions, les avant/après et les limites du benchmark. Aucun contrôle supplémentaire n’a été exécuté à la publication. [Candidat historique](../data/silver/candidat_final/questions_clean.parquet) · [Rapport historique](../data/silver/candidat_final/rapport_qualite_silver.csv)
+Le 24 novembre 2026, l’utilisatrice a donné sa validation définitive au candidat de 5 295 lignes × 10 colonnes et accepté l’écart résiduel des effectifs du rapport qualité comme non bloquant. Le fichier validé a été publié par copie et remplacement atomique. Le rapport a été repris tel quel avec les décisions, les avant/après et les limites du benchmark. Aucun contrôle supplémentaire n’a été exécuté à la publication. Ce premier Silver de 5 295 questions a été remplacé par le [corpus révisé à 5 290 questions](#révision-du-silver-après-les-cinq-arbitrages). Les fichiers du candidat historique restent locaux.
 
-La vérification en lecture seule du 24 novembre confirme que le Parquet et le rapport publiés sont identiques aux fichiers du candidat. Le SHA-256 du Parquet publié correspond à l’empreinte du candidat ci-dessus. La relecture a vérifié les huit corrections, les 5 295 identifiants uniques, leur recalcul, la cohérence des choix et des réponses attendues, ainsi que le rattachement du rapport aux identifiants du Silver définitif.
+La vérification en lecture seule du 24 novembre confirme que le Parquet et le rapport publiés sont identiques aux fichiers du candidat. Le SHA-256 du Parquet publié correspond à l’empreinte du candidat ci-dessus. La relecture a vérifié les huit corrections, les 5 295 identifiants uniques, leur recalcul, la cohérence des choix et des réponses attendues, ainsi que le rattachement du rapport aux identifiants du premier Silver publié.
 
 La première publication GitHub a partagé le CSV Bronze, les quatre jalons Parquet Silver et les trois CSV de qualité. Les tailles et les schémas ont été vérifiés en lecture seule. La conversion, le dédoublonnage et la normalisation concordent avec les transformations documentées. Le diagnostic et son classement concordent avec les entrées reprises dans le rapport historique. La recherche de secrets et de données confidentielles dans les textes et les métadonnées Parquet n’a rien relevé.
 
-## Révision du Silver après les cinq arbitrages
+#### Révision du Silver après les cinq arbitrages
 
 Les dix couples `question_id` et libellé exact du CSV arbitré concordent avec le corpus initial. Les cinq décisions `EXCLURE` concernent Nephelococcygia, le chêne *Quercus robur*, la planète la plus chaude, le plus grand pays et *The Starry Night*. Le contrôle neutralisant ponctuation, guillemets, casse et espaces a signalé cinq groupes avant application et zéro après. Les cinq exclusions laissent 4 501 QCM et 789 vrai/faux sur 24 catégories. La comparaison ligne à ligne confirme l’égalité des dix champs et de l’ordre relatif pour les 5 290 questions conservées.
 
 `preparer_silver.py finaliser` a reproduit le candidat et le rapport à la seconde exécution. Le rapport ajoute les cinq décisions `GARDER` et les cinq décisions `EXCLURE` aux 1 035 entrées historiques. Les nouveaux rangs d’audit renvoient au corpus enrichi de 5 295 questions avant exclusion. Le SHA-256 du corpus révisé est `af2e683573b68effb0832fff695e3acfeb138e3a67449ebd306814a00f67a92e`. [Silver révisé](../data/silver/questions_clean.parquet) · [Rapport qualité révisé](../data/silver/rapport_qualite_silver.csv)
 
-## Pilote Gemma 4 E2B sur le Silver définitif
+### Pilotes et benchmarks
 
-L’utilisatrice a approuvé le protocole du lot 3 et le tirage stratifié avec la seed 42. `pilote_gemma.py manifeste` a sélectionné 530 identifiants du Silver initial, soit 10,01 % des 5 295 questions, dans 109 des 141 strates et les 24 catégories. Le tirage a donné les mêmes identifiants dans le même ordre après inversion des lignes source. [Manifeste du pilote](../data/silver/pilot_lot2/pilot_question_ids.parquet) · [Métadonnées et empreintes](../data/silver/pilot_lot2/manifest_metadata.json)
+#### Pilote Gemma 4 E2B sur le Silver définitif
+
+L’utilisatrice a approuvé le protocole du lot 3 et le tirage stratifié avec la seed 42. `pilote_gemma.py manifeste` a sélectionné 530 identifiants du Silver initial, soit 10,01 % des 5 295 questions du corpus de tirage, dans 109 des 141 strates et les 24 catégories. Le tirage a donné les mêmes identifiants dans le même ordre après inversion des lignes source. [Manifeste du pilote](../data/silver/pilot_lot2/pilot_question_ids.parquet) · [Métadonnées et empreintes](../data/silver/pilot_lot2/manifest_metadata.json)
 
 Le manifeste compte 454 QCM et 76 vrai/faux, dont 179 faciles, 242 intermédiaires et 109 difficiles. Son SHA-256 est `f130cda8a5ca4c21c2a40016d3154d3f37bcb9de9c94446814afc460687305e5`.
 
@@ -156,7 +224,7 @@ Aucune des cinq exclusions ne figure au pilote. Le manifeste a conservé son emp
 
 Le script utilise Gemma 4 E2B Q4_K_M dans LM Studio `0.4.28+2`, avec le moteur Vulkan llama.cpp `2.80.1`. Depuis WSL, le client `curl.exe` accède au serveur Windows sur la boucle locale. Une instance dédiée à 4 096 tokens sert les deux blocs. Des essais synthétiques ont vérifié le scoring strict, le traitement d’un délai expiré et d’une réponse illisible, la reprise sans duplication après interruption et le rejet d’une configuration différente. [Script d’exécution](../pilote_gemma.py) · [Protocole du benchmark](ARCHITECTURE.md#benchmark)
 
-### Résultats du pilote
+##### Résultats du pilote
 
 Les 1 060 tentatives ont été reprises du journal local. Les deux tables Bronze de 530 lignes conservent les réponses brutes, temps, statuts, identifiants et configurations d’origine. Les deux tables Silver de 530 lignes ont été régénérées à partir du Bronze et des réponses attendues. La comparaison ligne par ligne avec le journal confirme les mêmes valeurs, les 1 060 UUID uniques, les scores d’origine et l’ordre du manifeste. [Bronze P1](../data/bronze/gemma_p1_choices.parquet) · [Bronze P2](../data/bronze/gemma_p2_expert.parquet) · [Silver P1](../data/silver/gemma_p1_choices.parquet) · [Silver P2](../data/silver/gemma_p2_expert.parquet)
 
@@ -177,60 +245,48 @@ Le nouveau flux a été testé hors ligne avec un journal vierge, un export vide
 
 Sur les 530 paires, 11 questions sont correctes uniquement avec `P2_expert` et huit uniquement avec `P1_choices`. L’écart d’exactitude observé est de 0,57 point en faveur de `P2_expert`. La durée active cumulée est de 12 min 51 s. En conditions comparables, l’estimation pour les deux prompts est de 2 h 08 min 16 s depuis zéro, ou 1 h 55 min 25 s pour les 4 760 questions restantes par prompt.
 
-## Benchmark Gemma du lot 4
+#### Benchmark Gemma du lot 4
 
 L’utilisatrice a autorisé le traitement des questions restantes. Les deux instances à 8 192 tokens ont été déchargées. L’instance `gemma-pilote-lot3` a été rechargée avec Gemma 4 E2B Q4_K_M, un contexte de 4 096 tokens et le moteur Vulkan `2.80.1`. La configuration exposée par LM Studio et les réglages d’inférence correspondent au journal du pilote.
 
 Le journal du lot 4 a repris les 1 060 tentatives du pilote et ajouté 4 760 tentatives par prompt, `P1_choices` puis `P2_expert`. Le contrôle final a vérifié l’ensemble exact des 5 290 `question_id` du corpus dans les quatre Parquet, leur ordre commun et les 10 580 identifiants d’inférence distincts. Les champs communs Bronze–Silver correspondent ligne à ligne et les résultats structurés concordent avec le scoring recalculé. [Bronze P1](../data/bronze/benchmark_lot4/gemma_p1_choices.parquet) · [Bronze P2](../data/bronze/benchmark_lot4/gemma_p2_expert.parquet) · [Silver P1](../data/silver/benchmark_lot4/gemma_p1_choices.parquet) · [Silver P2](../data/silver/benchmark_lot4/gemma_p2_expert.parquet)
 
-| Mesure | `P1_choices` | `P2_expert` |
-| --- | ---: | ---: |
-| Réponses reçues | 5 290 | 5 290 |
-| Réponses correctes | 2 863 (54,12 %) | 2 852 (53,91 %) |
-| QCM corrects sur 4 501 | 2 431 | 2 423 |
-| Vrai/faux corrects sur 789 | 432 | 429 |
-| Réponses conformes | 5 290 (100 %) | 5 290 (100 %) |
-| Erreurs techniques | 0 | 0 |
-| Latence moyenne | 0,463 s | 0,466 s |
-| Latence médiane | 0,448 s | 0,445 s |
-| Durée active avec le pilote | 2 988,84 s | 3 094,93 s |
+Le premier bilan complet couvrait P1 et P2 avec 5 290 réponses reçues et zéro erreur technique par prompt. Le [bilan des trois prompts](#comparaison-complète-des-trois-prompts) reprend leurs mesures.
 
 Sur les 5 290 paires, 89 questions sont correctes uniquement avec `P1_choices` et 78 uniquement avec `P2_expert`. L’écart observé est de 0,21 point en faveur de `P1_choices`. La durée active cumulée est de 1 h 41 min 24 s, dont 12 min 51 s mesurées au pilote.
 
 L’audit en lecture seule du script et des journaux LM Studio confirme l’indépendance conversationnelle des 10 580 requêtes mesurées. Les transitions entre prompts n’incluent aucune commande de déchargement ni de réinitialisation du cache. [Garantie méthodologique](ARCHITECTURE.md#indépendance-conversationnelle)
 
-## Pilote de P3_expert_advanced
+#### Pilote de P3_expert_advanced
 
-Le bloc P3 a utilisé Gemma 4 E2B Q4_K_M, LM Studio `0.4.28+2` et le moteur Vulkan `2.80.1`. Il a repris les 530 identifiants dans l’ordre du manifeste, avec les réglages d’inférence et le scoring strict du pilote historique. L’audit des requêtes LM Studio confirme une requête indépendante par question et un échauffement synthétique. Les empreintes des Parquet et des journaux historiques P1 et P2 concordent avant et après l’exécution. [Protocole](ARCHITECTURE.md#benchmark) · [Bronze P3](../data/bronze/gemma_p3_expert_advanced.parquet) · [Silver P3](../data/silver/gemma_p3_expert_advanced.parquet)
+Les deux exports `gemma_p3_expert_advanced.parquet` du pilote P3 à la racine de `data/bronze/` et `data/silver/` sont locaux. Le bloc P3 a utilisé Gemma 4 E2B Q4_K_M, LM Studio `0.4.28+2` et le moteur Vulkan `2.80.1`. Il a repris les 530 identifiants dans l’ordre du manifeste, avec les réglages d’inférence et le scoring strict du pilote historique. L’audit des requêtes LM Studio confirme une requête indépendante par question et un échauffement synthétique. Les empreintes des Parquet et des journaux historiques P1 et P2 concordent avant et après l’exécution. [Protocole](ARCHITECTURE.md#benchmark) · [Exports P3 complets publiés](#comparaison-complète-des-trois-prompts)
 
-| Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
-| --- | ---: | ---: | ---: |
-| Réponses correctes sur 530 | 301 (56,79 %) | 304 (57,36 %) | 291 (54,91 %) |
-| QCM corrects sur 454 | 252 | 257 | 246 |
-| Vrai/faux corrects sur 76 | 49 | 47 | 45 |
-| Réponses conformes sur 530 | 530 (100 %) | 530 (100 %) | 524 (98,87 %) |
-| Erreurs techniques | 0 | 0 | 0 |
-| Latence moyenne | 0,594 s | 0,618 s | 0,547 s |
-| Latence médiane | 0,559 s | 0,584 s | 0,508 s |
-| Durée active | 378,81 s | 392,25 s | 342,41 s |
+| Mesure | `P3_expert_advanced` |
+| --- | ---: |
+| Réponses correctes sur 530 | 291 (54,91 %) |
+| QCM corrects sur 454 | 246 |
+| Vrai/faux corrects sur 76 | 45 |
+| Réponses conformes sur 530 | 524 (98,87 %) |
+| Erreurs techniques | 0 |
+| Latence moyenne | 0,547 s |
+| Latence médiane | 0,508 s |
+| Durée active | 342,41 s |
 
 Sur les mêmes 530 questions, P3 a obtenu 13 bonnes réponses de moins que P2, soit 2,45 points d’exactitude de moins. P2 est seul correct sur 34 questions et P3 sur 21. Les six réponses P3 hors format concernent des QCM, dont un avec une réponse brute vide. Les six comptent comme incorrectes. La commande `pilote_gemma.py bilan-p3` reproduit ces métriques depuis les journaux du pilote.
 
 La projection pour les 4 760 questions restantes est de **51 min 15 s**, sur la base de `342,41 × 4 760 / 530` en conditions comparables. Elle réutilise les 530 mesures existantes et exclut l’échauffement.
 
-## Comparaison complète des trois prompts
+#### Comparaison complète des trois prompts
 
 Après validation du pilote P3, `benchmark_gemma.py executer --p3` a repris ses 530 mesures et envoyé 4 760 nouvelles requêtes à la même instance Gemma 4 E2B Q4_K_M. Le contrôle de reprise a confirmé l’empreinte du prompt, les paramètres d’inférence et le moteur Vulkan `2.80.1`. Le complément a pris **49 min 59 s** de temps actif, hors échauffement. [Bronze P3 complet](../data/bronze/benchmark_lot4/gemma_p3_expert_advanced.parquet) · [Silver P3 complet](../data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet)
 
+Les trois blocs ont reçu 5 290 réponses chacun. Les taux de réussite et de conformité ainsi que les latences moyennes figurent dans le [comparatif définitif](#comparaison-avec-gemma).
+
 | Mesure | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
 | --- | ---: | ---: | ---: |
-| Réponses reçues | 5 290 | 5 290 | 5 290 |
-| Réponses correctes | 2 863 (54,12 %) | 2 852 (53,91 %) | 2 753 (52,04 %) |
 | QCM corrects sur 4 501 | 2 431 | 2 423 | 2 354 |
 | Vrai/faux corrects sur 789 | 432 | 429 | 399 |
-| Réponses conformes | 5 290 (100 %) | 5 290 (100 %) | 5 235 (98,96 %) |
 | Erreurs techniques | 0 | 0 | 0 |
-| Latence moyenne | 0,463 s | 0,466 s | 0,522 s |
 | Latence médiane | 0,448 s | 0,445 s | 0,491 s |
 | Durée active avec le pilote | 2 988,84 s | 3 094,93 s | 3 341,34 s |
 
@@ -238,7 +294,7 @@ P3 obtient 110 bonnes réponses de moins que P1 (2,08 points) et 99 de moins que
 
 La relecture a confirmé les mêmes 5 290 identifiants ordonnés dans chaque Parquet et 15 870 identifiants d’inférence distincts. Les 530 premières lignes des exports P3 concordent champ par champ avec les fichiers du pilote. Le scoring strict recalculé concorde avec Silver. Les empreintes des fichiers historiques de P1, P2 et du pilote P3 concordent avant et après le complément. Le journal serveur confirme l’indépendance des 5 290 requêtes P3. La commande `benchmark_gemma.py bilan --p3` reproduit le comparatif en lecture seule. [Protocole](ARCHITECTURE.md#indépendance-conversationnelle)
 
-## Pilote Bonsai 27B arrêté et modèle abandonné
+#### Pilote Bonsai 27B arrêté et modèle abandonné
 
 L’utilisatrice a arrêté le pilote après **41 inférences terminées sur 90**. Gemma avait été déchargé et Bonsai 27B Q1_0 a chargé en 37,02 s. L’exécution de `P1_choices` est complète. L’arrêt a interrompu la douzième requête de `P2_expert`, conservée avec le statut `interrupted`. Le bloc `P3_expert_advanced` et le benchmark complet sont restés au stade de la préparation. Après l’arrêt, l’API LM Studio a confirmé que Bonsai était déchargé et que la liste des instances chargées était vide. L’utilisatrice a validé l’abandon définitif de Bonsai pour des raisons de faisabilité matérielle. [Configuration](ARCHITECTURE.md#pilote-bonsai-27b)
 
@@ -255,13 +311,13 @@ L’utilisatrice a arrêté le pilote après **41 inférences terminées sur 90*
 
 La latence moyenne sur les 41 réponses est de **15,22 s** et la durée active cumulée des deux segments est de **10 min 43 s**. En appliquant cette latence moyenne aux 15 870 inférences du benchmark complet, le temps d’inférence est estimé à **67 h 05** depuis zéro, ou **66 h 55** pour les 15 829 inférences restantes après reprise des 41 mesures. Cette extrapolation exclut les échauffements et la persistance. Elle suppose des latences comparables à celles des réponses observées, y compris pour P3, dont la durée reste inconnue.
 
-Le modèle est abandonné pour ce benchmark sur la machine actuelle en raison de la pression mémoire et du temps de traitement extrapolé. Sur 44 relevés Windows du processus `llama-server`, le maximum observé est de 5,79 Gio de mémoire GPU partagée sur l’Intel UHD et de 14,30 Gio de mémoire privée engagée par le processus. Ces compteurs se lisent séparément. La mémoire physique totale signalée par Windows est de 15,75 Gio. Un relevé pendant le pilote indiquait 444 Mio de mémoire physique disponible. [Relevés mémoire](../data/silver/pilote_bonsai/memoire.jsonl)
+Le modèle est abandonné pour ce benchmark sur la machine actuelle en raison de la pression mémoire et du temps de traitement extrapolé. Sur 44 relevés Windows du processus `llama-server`, le maximum observé est de 5,79 Gio de mémoire GPU partagée sur l’Intel UHD et de 14,30 Gio de mémoire privée engagée par le processus. Ces compteurs se lisent séparément. La mémoire physique totale signalée par Windows est de 15,75 Gio. Un relevé pendant le pilote indiquait 444 Mio de mémoire physique disponible. Les relevés restent dans `data/silver/pilote_bonsai/memoire.jsonl` (local).
 
-Les mesures et la tentative interrompue sont conservées dans le journal DuckDB et les Parquet Bonsai. L’audit du journal LM Studio retrouve 42 appels du pilote, deux échauffements et une requête synthétique de contrôle. Chacun transmet un seul message avec `store=false`. La relecture des exports vérifie l’ordre du manifeste, les champs communs entre Bronze et Silver et le scoring strict. Les empreintes SHA-256 des 41 fichiers de données Bronze et Silver présents avant le pilote concordent, y compris les fichiers Gemma. [Mesures Bronze](../data/bronze/pilote_bonsai/) · [Résultats et journal Silver](../data/silver/pilote_bonsai/)
+Les mesures et la tentative interrompue sont conservées dans le journal DuckDB et les Parquet Bonsai. L’audit du journal LM Studio retrouve 42 appels du pilote, deux échauffements et une requête synthétique de contrôle. Chacun transmet un seul message avec `store=false`. La relecture des exports vérifie l’ordre du manifeste, les champs communs entre Bronze et Silver et le scoring strict. Les empreintes SHA-256 des 41 fichiers de données Bronze et Silver présents avant le pilote concordent, y compris les fichiers Gemma.
 
-Les résultats partiels Bonsai sont conservés localement pour la traçabilité. La future comparaison Gold des benchmarks complets exclura l’ensemble de ces mesures. [Périmètre Gold](ARCHITECTURE.md#gold-et-restitution)
+Les résultats partiels Bonsai sont conservés localement pour la traçabilité. Ces mesures sont hors du périmètre de la comparaison Gold des benchmarks complets. [Périmètre Gold](ARCHITECTURE.md#gold-et-restitution)
 
-## Test de faisabilité Qwen3-4B-Instruct-2507
+#### Test de faisabilité Qwen3-4B-Instruct-2507
 
 L’utilisatrice a validé les résultats du test de faisabilité. Les 90 inférences sont conservées localement, y compris les 31 réponses hors format.
 
@@ -284,9 +340,9 @@ Les trois blocs cumulent **2 min 40,61 s** de temps actif. L’extrapolation par
 
 Un relevé ponctuel pendant le pilote indiquait environ 256 Mio de mémoire physique disponible sur les 15,75 Gio de Windows et 3,70 Gio de mémoire privée engagée par `llama-server`. À la fin du pilote, la mémoire physique disponible mesurée est passée d’environ 610 Mio à 5,67 Gio après déchargement. LM Studio a confirmé que la liste des instances chargées était alors vide.
 
-L’audit du journal LM Studio confirme 90 requêtes mesurées et trois échauffements, chacun avec un seul message, `store=false`, sans identifiant de réponse précédente. Les extraits d’`input` concordent avec les prompts attendus. La relecture du journal DuckDB et des six Parquet vérifie les 90 identifiants distincts, l’ordre du manifeste, les champs communs Bronze–Silver et le scoring recalculé. Les SHA-256 des 49 fichiers Bronze et Silver présents avant le pilote concordent, y compris toutes les données Gemma et Bonsai. [Mesures Bronze](../data/bronze/pilote_qwen/) · [Résultats Silver](../data/silver/pilote_qwen/) · [Journal DuckDB](../data/silver/pilote_qwen/pilot.duckdb)
+L’audit du journal LM Studio confirme 90 requêtes mesurées et trois échauffements, chacun avec un seul message, `store=false`, sans identifiant de réponse précédente. Les extraits d’`input` concordent avec les prompts attendus. La relecture du journal DuckDB et des six Parquet vérifie les 90 identifiants distincts, l’ordre du manifeste, les champs communs Bronze–Silver et le scoring recalculé. Les SHA-256 des 49 fichiers Bronze et Silver présents avant le pilote concordent, y compris toutes les données Gemma et Bonsai. Les exports restent dans les répertoires locaux `pilote_qwen/` des deux couches, avec `pilot.duckdb` côté Silver.
 
-## Test de faisabilité Ministral-3-3B-Instruct-2512
+#### Test de faisabilité Ministral-3-3B-Instruct-2512
 
 Le 24 novembre 2026, le test a exécuté les 90 inférences sur les mêmes 30 questions que Bonsai et Qwen, dans le même ordre et avec les trois gabarits d’origine. L’instance `ministral-benchmark-lot4` a chargé le GGUF Instruct Q4_K_M en 9,19 s avec un contexte de 4 096 tokens dans LM Studio `0.4.28+2` et le moteur Vulkan `2.80.1`. Le plafond de sortie était de 16 tokens. Le déchargement a été confirmé par l’API LM Studio. [Configuration et reproduction](ARCHITECTURE.md#pilote-ministral-3-3b-instruct-2512)
 
@@ -308,11 +364,11 @@ Les huit sorties P3 hors format concernent les QCM aux rangs 5, 6, 8, 15, 20, 24
 
 Les trois blocs cumulent **1 min 39,52 s** de temps actif. La projection est de **4 h 52 min 29 s** pour les 15 870 tentatives depuis zéro, ou **4 h 50 min 50 s** pour les 15 780 restantes en réutilisant le pilote. Le calcul applique la durée active de chaque bloc de 30 tentatives au volume correspondant. Il inclut la persistance et exclut le chargement et les échauffements. Les projections supposent des conditions comparables et donnent un ordre de grandeur à partir de 30 questions par prompt.
 
-Sur les 20 relevés Windows pris pendant le pilote, la mémoire physique disponible a atteint un minimum de 494 Mio sur 15,75 Gio. Le processus `llama-server` a atteint 3,70 Gio de mémoire privée engagée et 5,35 Gio d’ensemble de travail. Les compteurs se lisent séparément. La mémoire physique disponible était de 5,83 Gio avant chargement et de 6,61 Gio après déchargement. [Relevés mémoire](../data/silver/pilote_ministral/memoire.jsonl)
+Sur les 20 relevés Windows pris pendant le pilote, la mémoire physique disponible a atteint un minimum de 494 Mio sur 15,75 Gio. Le processus `llama-server` a atteint 3,70 Gio de mémoire privée engagée et 5,35 Gio d’ensemble de travail. Les compteurs se lisent séparément. La mémoire physique disponible était de 5,83 Gio avant chargement et de 6,61 Gio après déchargement. Les relevés restent dans `data/silver/pilote_ministral/memoire.jsonl` (local).
 
-L’audit des journaux LM Studio retrouve 90 requêtes mesurées et trois échauffements avec un seul message, `store=false`, sans identifiant de réponse précédente. Les extraits d’`input` concordent avec les prompts attendus, et les réponses du serveur concordent avec le journal DuckDB. La relecture des six Parquet confirme 90 identifiants d’inférence distincts, l’ordre du manifeste, l’égalité des champs communs Bronze–Silver et le scoring recalculé. Les empreintes SHA-256 des 56 fichiers Bronze et Silver préexistants concordent. [Mesures Bronze](../data/bronze/pilote_ministral/) · [Résultats Silver](../data/silver/pilote_ministral/) · [Journal DuckDB](../data/silver/pilote_ministral/pilot.duckdb)
+L’audit des journaux LM Studio retrouve 90 requêtes mesurées et trois échauffements avec un seul message, `store=false`, sans identifiant de réponse précédente. Les extraits d’`input` concordent avec les prompts attendus, et les réponses du serveur concordent avec le journal DuckDB. La relecture des six Parquet confirme 90 identifiants d’inférence distincts, l’ordre du manifeste, l’égalité des champs communs Bronze–Silver et le scoring recalculé. Les empreintes SHA-256 des 56 fichiers Bronze et Silver préexistants concordent. Les exports restent dans les répertoires locaux `pilote_ministral/` des deux couches, avec `pilot.duckdb` côté Silver.
 
-### Comparaison des trois tests de faisabilité
+##### Comparaison des trois tests de faisabilité
 
 | Modèle | Prompt | Bonnes réponses | Conformité | Latence moyenne / médiane | Durée active |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -328,7 +384,7 @@ L’audit des journaux LM Studio retrouve 90 requêtes mesurées et trois échau
 
 Les blocs mesurés comptent zéro erreur technique. Le bloc P2 de Bonsai s’est arrêté pendant sa douzième requête, qui est enregistrée comme interrompue. Sur les 11 premières questions P2, tous les modèles ont rendu 11 réponses conformes. Bonsai en a réussi six, Qwen et Ministral trois chacun. La durée extrapolée depuis zéro est de 7 h 52 min 02 s pour Qwen et 4 h 52 min 29 s pour Ministral selon la même méthode. L’estimation historique de Bonsai est d’environ 67 h 05 d’inférence, calculée à partir de la latence moyenne de ses 41 réponses.
 
-## Choix définitif du deuxième modèle
+#### Choix définitif du deuxième modèle
 
 Le 25 novembre 2026, l’utilisatrice a validé le pilote et retenu **Ministral-3-3B-Instruct-2512** pour le deuxième benchmark complet.
 
@@ -336,26 +392,22 @@ Le 25 novembre 2026, l’utilisatrice a validé le pilote et retenu **Ministral-
 - **Qwen3 4B Instruct** présentait une durée active extrapolée de 7 h 52 min et une conformité P3 de 0/30.
 - **Ministral 3 3B Instruct** offre le meilleur compromis entre durée, conformité et faisabilité matérielle parmi les pilotes. Il a terminé les 90 inférences sur la machine, avec une conformité de 100 % sur P1 et P2, de 73,3 % sur P3 et une durée active extrapolée de 4 h 52 min.
 
-Les mesures Bonsai et Qwen restent dans les répertoires locaux de leurs pilotes pour la traçabilité. Les futurs marts Gold s’appuieront sur l’OBT de `dbt intermediate`, alimentée par les benchmarks complets validés de Gemma et Ministral.
+Les mesures Bonsai et Qwen restent dans les répertoires locaux de leurs pilotes pour la traçabilité. Les benchmarks complets validés de Gemma et Ministral alimentent l’OBT de `dbt intermediate` et les marts Gold.
 
-## Benchmark complet Ministral du lot 4
+#### Benchmark complet Ministral du lot 4
 
-Le 25 novembre 2026, le benchmark Ministral a démarré avec les 90 tentatives du pilote, à raison de 30 par prompt. Le plan comporte 5 260 nouvelles tentatives par prompt, soit 15 780 au total, dans l’ordre du manifeste du benchmark Gemma. Le contrôle au démarrage a retrouvé la configuration du pilote, y compris les empreintes des trois prompts. [Protocole et chemins de reprise](ARCHITECTURE.md#benchmark-complet-ministral-du-lot-4)
+Le 25 novembre 2026, le benchmark Ministral a démarré avec les 90 tentatives du pilote, à raison de 30 par prompt. Le plan prévoyait 5 260 nouvelles tentatives par prompt, soit 15 780 au total, dans l’ordre du manifeste du benchmark Gemma. Le contrôle au démarrage a retrouvé la configuration du pilote, y compris les empreintes des trois prompts. [Protocole et chemins de reprise](ARCHITECTURE.md#benchmark-complet-ministral-du-lot-4)
 
 À 03 h 41, le client HTTP Windows a interrompu P3 après 3 159 réponses reçues, pilote compris. P1 et P2 étaient complets. Le journal LM Studio a compté 13 649 nouvelles réponses et trois échauffements avant l’arrêt. Les 13 échecs de transport qui suivent la dernière réponse ont été isolés pour permettre la reprise des positions sans requête reçue par LM Studio.
 
 Le benchmark complet compte **15 870 réponses reçues**, dont 90 reprises du pilote. Les 15 780 nouvelles inférences couvrent exactement les 5 260 positions restantes de chacun des trois prompts.
 
+Le [comparatif définitif](#comparaison-avec-gemma) donne les effectifs, taux et latences moyennes par configuration.
+
 | Mesure Ministral | `P1_choices` | `P2_expert` | `P3_expert_advanced` |
 | --- | ---: | ---: | ---: |
-| Réponses reçues | 5 290 | 5 290 | 5 290 |
-| Bonnes réponses | 2 844 | 2 779 | 2 182 |
-| Mauvaises réponses | 2 446 | 2 511 | 3 108 |
-| Exactitude stricte | 53,76 % | 52,53 % | 41,25 % |
-| Conformité | 5 278 (99,77 %) | 5 187 (98,05 %) | 4 166 (78,75 %) |
 | Échecs de transport archivés | 0 | 0 | 13 |
 | Positions sans réponse à la clôture | 0 | 0 | 0 |
-| Latence HTTP moyenne | 0,736 s | 0,733 s | 1,092 s |
 | Latence HTTP médiane | 0,711 s | 0,706 s | 0,753 s |
 | Durée active du complément | 1 h 14 min 50 s | 1 h 14 min 43 s | 1 h 46 min 32 s |
 | Durée active avec le pilote | 1 h 15 min 16 s | 1 h 15 min 10 s | 1 h 47 min 19 s |
@@ -364,29 +416,23 @@ P3 compte **1 124 sorties hors format**, dont 793 QCM et 331 vrai/faux. Le sco
 
 Le complément a pris **4 h 16 min 05 s** de temps actif. Avec les pilotes, le total est de **4 h 17 min 45 s** pour Ministral et **2 h 37 min 05 s** pour Gemma. Le temps actif inclut les écritures et exclut les échauffements, le chargement et la pause entre les deux segments de P3.
 
-### Comparaison avec Gemma
+L’audit confirme 15 870 identifiants d’inférence distincts, l’ordre commun, l’identité des 90 mesures Pilote–Bronze–Silver, la concordance du journal et des Parquet et le scoring recalculé. Les 13 739 réponses présentes avant la reprise concordent champ par champ. L’audit LM Studio retrouve 15 784 appels, dont quatre échauffements, avec un seul message, `store=false` et sans référence à une réponse précédente. Les empreintes des 64 fichiers historiques Bronze et Silver contrôlés avant la reprise concordent. [Bronze](../data/bronze/benchmark_ministral_lot4/) · [Silver](../data/silver/benchmark_ministral_lot4/) · [Chemin du journal local](ARCHITECTURE.md#benchmark-complet-ministral-du-lot-4)
 
-| Prompt | Exactitude Gemma / Ministral | Conformité Gemma / Ministral | Latence moyenne Gemma / Ministral | Gemma seul correct / Ministral seul correct |
-| --- | ---: | ---: | ---: | ---: |
-| P1 | 54,12 % / 53,76 % | 100,00 % / 99,77 % | 0,463 / 0,736 s | 831 / 812 |
-| P2 | 53,91 % / 52,53 % | 100,00 % / 98,05 % | 0,466 / 0,733 s | 884 / 811 |
-| P3 | 52,04 % / 41,25 % | 98,96 % / 78,75 % | 0,522 / 1,092 s | 1 239 / 668 |
+#### Clôture du lot 4
 
-L’audit confirme 15 870 identifiants d’inférence distincts, l’ordre commun, l’identité des 90 mesures Pilote–Bronze–Silver, la concordance du journal et des Parquet et le scoring recalculé. Les 13 739 réponses présentes avant la reprise concordent champ par champ. L’audit LM Studio retrouve 15 784 appels, dont quatre échauffements, avec un seul message, `store=false` et sans référence à une réponse précédente. Les empreintes des 64 fichiers historiques Bronze et Silver contrôlés avant la reprise concordent. [Bronze](../data/bronze/benchmark_ministral_lot4/) · [Silver](../data/silver/benchmark_ministral_lot4/) · [Journal DuckDB](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
+L’utilisatrice a validé définitivement le benchmark Ministral et le comparatif avec Gemma. Les 13 échecs de transport restent archivés dans la table `echecs_transport_reprise` du journal DuckDB. Le projet a ensuite poursuivi avec la consolidation dans dbt et les marts Gold. [Journal d’audit local et reprise](ARCHITECTURE.md#benchmark-complet-ministral-du-lot-4)
 
-## Clôture du lot 4
+### Modélisation, publication et restitution
 
-L’utilisatrice a validé définitivement le benchmark Ministral et le comparatif avec Gemma. Les 13 échecs de transport restent archivés dans la table `echecs_transport_reprise` du journal DuckDB. Les phases dbt et Gold sont hors de cette clôture. [Journal d’audit](../data/silver/benchmark_ministral_lot4/benchmark.duckdb)
-
-## Décision initiale de consolidation
+#### Décision initiale de consolidation
 
 Les sources disponibles sont les sept Parquet validés du Silver préparé. Le corpus OpenTDB contient 5 290 lignes et 10 colonnes. Les six Parquet des benchmarks Gemma et Ministral contiennent chacun 5 290 réponses pour une combinaison modèle–prompt. Le Bronze OpenTDB et LLM reste intact. [Chemins des sept sources](ARCHITECTURE.md#sources-du-silver-préparé)
 
 La décision initiale classait le résultat de la consolidation en « Silver consolidé ». Elle fixait le grain à une ligne par combinaison question × modèle × prompt et le périmètre aux six benchmarks complets, réponses hors format comprises. L’alignement D42 réaffecte cette OBT à `dbt intermediate` avec les mêmes sources et règles. [Décision initiale et remplacement](DECISIONS.md#dec-032--construire-une-one-big-table-dans-le-silver-consolidé)
 
-## Construction initiale et contrôles de l’OBT
+#### Construction initiale et contrôles de l’OBT
 
-Les étapes 5 à 7, validées au jalon `e76715e`, ont produit `silver.obt_silver` dans la base locale `data/silver/obt_silver.duckdb`. `dbt build` a réussi avec dbt Core `1.12.7`, dbt-duckdb `1.11.1` et DuckDB `2.0.1` dans la `.venv` du projet. Le build a matérialisé 8 vues et 1 table et validé les 27 tests de données, sans avertissement ni erreur. Cette base est la référence du reclassement D42.
+Les étapes 5 à 7, validées au jalon `e76715e`, ont produit `silver.obt_silver` dans la base locale `data/silver/obt_silver.duckdb`. `dbt build` a réussi avec dbt Core `1.12.7`, dbt-duckdb `1.11.1` et DuckDB `2.0.1` dans la `.venv` du projet. Le build a matérialisé 8 vues et 1 table et validé les 27 tests de données, sans avertissement ni erreur. Cette base locale a servi de référence pour le reclassement D42.
 
 | Contrôle | Résultat |
 | --- | --- |
@@ -397,40 +443,62 @@ Les étapes 5 à 7, validées au jalon `e76715e`, ont produit `silver.obt_silver
 | Réponses et `NULL` | 1 294 réponses hors format avec `ai_answer` à `NULL`, dont quatre réponses brutes vides. `error_type` et `error_message` sont conservés avec 31 740 valeurs `NULL` chacun. |
 | Intégrité des sources | Les SHA-256 des 85 fichiers Bronze et Silver préexistants concordent avant et après le build. |
 
-## Alignement sur le schéma D42
+#### Alignement sur le schéma D42
 
-Les sept Parquet préparés par Python forment Silver et constituent le point de départ du lignage dbt. La base locale `data/trivial_pursuit.duckdb` regroupe les sept vues dans `staging`, la vue d’union et la table `intermediate.obt_silver`. Le schéma `gold` est réservé aux futurs marts métier consommables par Power BI, Qlik, un environnement de data science ou une application métier. [Décision D42](DECISIONS.md#dec-034--appliquer-la-séparation-des-couches-du-cours-d42)
+Les sept Parquet préparés par Python forment Silver et constituent le point de départ du lignage dbt. La base locale `data/trivial_pursuit.duckdb` regroupe les sept vues dans `staging`, la vue d’union et la table `intermediate.obt_silver`. Ce jalon a réservé le schéma `gold` aux marts métier. Les sept marts y ont ensuite été construits et sont consommés par Streamlit. [Décision D42](DECISIONS.md#dec-034--appliquer-la-séparation-des-couches-du-cours-d42)
 
 `dbt build` a réussi de nouveau pour les 9 modèles et 27 tests, avec zéro avertissement et zéro erreur. La relecture confirme 31 740 lignes, 22 colonnes, 5 290 questions distinctes, six résultats par question, 5 290 lignes pour chacune des six combinaisons modèle–prompt et 1 294 réponses hors format conservées. Elle retrouve zéro doublon sur le grain et zéro résultat orphelin.
 
 La comparaison en lecture seule avec `silver.obt_silver` dans la base historique confirme le même ordre de colonnes, les mêmes types et la même nullabilité. Les `EXCEPT ALL` dans les deux sens retournent chacun zéro ligne. Les tests de source confirment la concordance des valeurs, scores, statuts et latences, `NULL` compris. Les empreintes SHA-256 des 86 fichiers Bronze et Silver préexistants concordent, dont les sept Parquet et la base de référence.
 
-La documentation dbt de ce jalon exposait le lignage jusqu’à `intermediate.obt_silver`. Les résultats de ce build sont dans `dbt/target/build_run_results.json`. [Dictionnaire, qualité et lignage](ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt) · [Procédure](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
+La documentation dbt de ce jalon exposait le lignage jusqu’à `intermediate.obt_silver`. Les résultats locaux de ce build ont été conservés dans `dbt/target/build_run_results.json`. [Dictionnaire, qualité et lignage](ARCHITECTURE.md#dictionnaire-des-colonnes-de-lobt) · [Procédure](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
 
-## Publication collaborative des données définitives
+#### Publication collaborative des données définitives
 
-Le dépôt versionne les douze Parquet définitifs de Gemma et Ministral, soit six en Bronze et six en Silver. Les huit fichiers ajoutés correspondent à Gemma P3 et aux trois prompts de Ministral dans les deux couches. Avec le corpus OpenTDB final, les six exports Silver donnent les sept sources du projet dbt et couvrent 31 740 résultats de benchmark. Le CSV Bronze OpenTDB, les jalons Parquet, les rapports qualité et les scripts sont également disponibles dans le dépôt. [Inventaire des données publiées](../README.md#jeux-de-données-disponibles-sur-github) · [Procédure dbt](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
+Le dépôt versionne les douze Parquet définitifs de Gemma et Ministral, soit six en Bronze et six en Silver. Les huit fichiers ajoutés correspondent à Gemma P3 et aux trois prompts de Ministral dans les deux couches. Avec le corpus OpenTDB final, les six exports Silver donnent les sept sources du projet dbt et couvrent 31 740 résultats de benchmark. Le CSV Bronze OpenTDB, les jalons Parquet, les rapports qualité et les scripts sont également disponibles dans le dépôt. [Résumé des livrables](../README.md#jeux-de-données-disponibles-sur-github) · [Procédure dbt](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
 
-## Lot 8 · Construction de Gold
+##### Inventaire des données publiées
+
+| Fichier | Rôle et statut |
+| --- | --- |
+| [`data/bronze/questions_raw.csv`](../data/bronze/questions_raw.csv) | Collecte OpenTDB de référence, 5 299 questions et 6 champs bruts |
+| [`data/silver/questions_avant_dedoublonnage.parquet`](../data/silver/questions_avant_dedoublonnage.parquet) | Jalon de conversion au format Parquet. Conserve les 5 299 lignes et les 6 champs bruts du CSV. |
+| [`data/silver/questions_dedoublonnees.parquet`](../data/silver/questions_dedoublonnees.parquet) | Jalon dédoublonné selon les quatre arbitrages validés, 5 295 questions et 6 champs bruts |
+| [`data/silver/questions_normalisees.parquet`](../data/silver/questions_normalisees.parquet) | Jalon normalisé validé, 5 295 questions et 6 champs. Les réponses incorrectes sont stockées sous forme de liste. |
+| [`data/silver/questions_clean.parquet`](../data/silver/questions_clean.parquet) | Corpus du benchmark révisé, 5 290 questions et 10 colonnes après les cinq exclusions validées. Intègre les huit corrections historiques et quatre champs d’enrichissement. |
+| [`data/silver/diagnostic_anglais_lot2.csv`](../data/silver/diagnostic_anglais_lot2.csv) | Diagnostic linguistique du jalon normalisé, avec 1 019 propositions de correction et 11 cas à éclaircir |
+| [`data/silver/classement_diagnostic_anglais_lot2.csv`](../data/silver/classement_diagnostic_anglais_lot2.csv) | Classement des 1 030 entrées du diagnostic par catégorie, risque et modalité de validation, utilisé pour préparer l’arbitrage |
+| [`data/silver/rapport_qualite_silver.csv`](../data/silver/rapport_qualite_silver.csv) | Rapport de 1 045 entrées avec les décisions historiques et les dix lignes GARDER/EXCLURE des cinq groupes. |
+| [`data/bronze/gemma_p1_choices.parquet`](../data/bronze/gemma_p1_choices.parquet) | 530 tentatives brutes de Gemma 4 E2B pour `P1_choices` |
+| [`data/bronze/gemma_p2_expert.parquet`](../data/bronze/gemma_p2_expert.parquet) | 530 tentatives brutes de Gemma 4 E2B pour `P2_expert` |
+| [`data/silver/gemma_p1_choices.parquet`](../data/silver/gemma_p1_choices.parquet) | 530 résultats structurés pour `P1_choices` |
+| [`data/silver/gemma_p2_expert.parquet`](../data/silver/gemma_p2_expert.parquet) | 530 résultats structurés pour `P2_expert` |
+| [`data/silver/pilot_lot2/pilot_question_ids.parquet`](../data/silver/pilot_lot2/pilot_question_ids.parquet) | Manifeste définitif des 530 questions du pilote |
+| [`data/silver/pilot_lot2/manifest_metadata.json`](../data/silver/pilot_lot2/manifest_metadata.json) | Empreintes du manifeste, du corpus de tirage et du Silver révisé |
+| [`data/bronze/benchmark_lot4/gemma_p1_choices.parquet`](../data/bronze/benchmark_lot4/gemma_p1_choices.parquet) | 5 290 mesures brutes du benchmark complet pour `P1_choices` |
+| [`data/bronze/benchmark_lot4/gemma_p2_expert.parquet`](../data/bronze/benchmark_lot4/gemma_p2_expert.parquet) | 5 290 mesures brutes du benchmark complet pour `P2_expert` |
+| [`data/bronze/benchmark_lot4/gemma_p3_expert_advanced.parquet`](../data/bronze/benchmark_lot4/gemma_p3_expert_advanced.parquet) | 5 290 mesures brutes Gemma pour `P3_expert_advanced` |
+| [`data/silver/benchmark_lot4/gemma_p1_choices.parquet`](../data/silver/benchmark_lot4/gemma_p1_choices.parquet) | 5 290 résultats structurés du benchmark complet pour `P1_choices` |
+| [`data/silver/benchmark_lot4/gemma_p2_expert.parquet`](../data/silver/benchmark_lot4/gemma_p2_expert.parquet) | 5 290 résultats structurés du benchmark complet pour `P2_expert` |
+| [`data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet`](../data/silver/benchmark_lot4/gemma_p3_expert_advanced.parquet) | 5 290 résultats structurés Gemma pour `P3_expert_advanced` |
+| [`data/bronze/benchmark_ministral_lot4/ministral_p1_choices.parquet`](../data/bronze/benchmark_ministral_lot4/ministral_p1_choices.parquet) | 5 290 mesures brutes Ministral pour `P1_choices` |
+| [`data/bronze/benchmark_ministral_lot4/ministral_p2_expert.parquet`](../data/bronze/benchmark_ministral_lot4/ministral_p2_expert.parquet) | 5 290 mesures brutes Ministral pour `P2_expert` |
+| [`data/bronze/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet`](../data/bronze/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet) | 5 290 mesures brutes Ministral pour `P3_expert_advanced` |
+| [`data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet`](../data/silver/benchmark_ministral_lot4/ministral_p1_choices.parquet) | 5 290 résultats structurés Ministral pour `P1_choices` |
+| [`data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet`](../data/silver/benchmark_ministral_lot4/ministral_p2_expert.parquet) | 5 290 résultats structurés Ministral pour `P2_expert` |
+| [`data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet`](../data/silver/benchmark_ministral_lot4/ministral_p3_expert_advanced.parquet) | 5 290 résultats structurés Ministral pour `P3_expert_advanced` |
+
+Les trois CSV de qualité utilisent le point-virgule. Le diagnostic et son classement présentent les propositions. Le rapport révisé indique les décisions appliquées. Les journaux DuckDB, le manifeste complet du lot 4, l’essai provisoire et les copies des candidats restent locaux.
+
+#### Lot 8 · Construction de Gold
 
 Les sept marts sont matérialisés dans le schéma `gold` de `data/trivial_pursuit.duckdb`. Leur lignage part de `intermediate.obt_silver` et `mart_category_gap` réutilise `mart_category`. La définition des grains, des unités et des mesures figure dans l’architecture. [Marts Gold](ARCHITECTURE.md#gold-et-restitution)
-
-| Modèle et prompt | Correctes | Incorrectes conformes | Hors format | Réussite | Conformité | Latence moyenne |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Gemma P1 | 2 863 | 2 427 | 0 | 54,12 % | 100,00 % | 0,463 s |
-| Gemma P2 | 2 852 | 2 438 | 0 | 53,91 % | 100,00 % | 0,466 s |
-| Gemma P3 | 2 753 | 2 482 | 55 | 52,04 % | 98,96 % | 0,522 s |
-| Ministral P1 | 2 844 | 2 434 | 12 | 53,76 % | 99,77 % | 0,736 s |
-| Ministral P2 | 2 779 | 2 408 | 103 | 52,53 % | 98,05 % | 0,733 s |
-| Ministral P3 | 2 182 | 1 984 | 1 124 | 41,25 % | 78,75 % | 1,092 s |
-
-Chaque comparaison couvre 5 290 paires. Pour P3−P1, Gemma compte 313 gains et 423 pertes (−2,08 points de réussite), et Ministral 155 gains et 817 pertes (−12,51 points). Sur les six configurations, 1 379 questions sont toujours correctes, 1 278 toujours incorrectes et 2 633 ont un résultat mixte.
 
 Le `dbt build` intégral en base de vérification a réussi pour 16 modèles et 41 tests. Le build ciblé dans la base de travail a matérialisé les sept marts et exécuté leurs 14 tests, puis `dbt test` a confirmé les 41 tests, dont les 27 tests historiques. Le catalogue confirme les sept tables et leurs dimensions attendues. La documentation statique du lignage a été régénérée dans `dbt/target/static_index.html`.
 
 Les SHA-256 des 86 fichiers Bronze et Silver concordent. Les définitions des huit vues et de l’OBT, leurs schémas et les valeurs de l’OBT ont été comparés avant et après le build ciblé, avec zéro écart dans les deux sens. L’ancien `data/gold/` ne contenait qu’un `.gitkeep` et le projet dbt écrit dans `data/trivial_pursuit.duckdb`. Ce répertoire vide a été retiré. [Procédure de reconstruction](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
 
-## Lot 8 bis · Complément méthodologique Gold
+#### Lot 8 bis · Complément méthodologique Gold
 
 Dans `data/trivial_pursuit.duckdb`, `mart_difficulty` compte 54 lignes × 9 colonnes, `mart_question_type` 12 × 9 et `mart_question_outcomes` 5 290 × 14. Le taux du hasard est de 25 % pour les 4 501 QCM et de 50 % pour les 789 vrai/faux par configuration. [Grains et définitions](ARCHITECTURE.md#gold-et-restitution)
 
@@ -449,34 +517,25 @@ Dans `data/trivial_pursuit.duckdb`, `mart_difficulty` compte 54 lignes × 9 colo
 | Ministral P2 | +27,70 | 99,96 % | +1,58 | 87,20 % |
 | Ministral P3 | +17,41 | 82,38 % | −15,40 | 58,05 % |
 
-Le comptage de l’OBT confirme 308 consensus incorrects parmi les 1 278 questions `all_incorrect`. Ils se répartissent en 207 QCM et 101 vrai/faux. Les autres effectifs restent à 1 379 questions `all_correct` et 2 633 `mixed`.
+Le comptage indépendant de l’OBT confirme les 308 consensus incorrects parmi les 1 278 échecs communs. [Répartition définitive par question](#comparaison-avec-gemma)
 
 Le `dbt build` complet en base de vérification a validé 16 modèles et 41 tests, dont les 27 historiques. Le build ciblé dans la base de travail a validé les trois tables modifiées et leurs six tests. Les totaux par difficulté concordent avec la ventilation, les taux et la conformité avec l’OBT, et le consensus avec un comptage indépendant. Les SHA-256 des 86 fichiers Bronze et Silver concordent. L’OBT et les quatre autres marts conservent leurs schémas et toutes leurs valeurs, et les définitions des huit vues restent identiques. La documentation du lignage a été régénérée dans `dbt/target/static_index.html`. [Procédure de reconstruction](../README.md#construire-le-pipeline-dbt-et-consulter-le-lignage)
 
-## Lot 9 · Dashboard Streamlit
+#### Lot 9 · Dashboard Streamlit
 
 Les sept marts totalisent 5 584 lignes. Le dashboard les lit dans `data/trivial_pursuit.duckdb` en lecture seule et présente les 5 290 questions et 31 740 réponses du benchmark dans quatre onglets. Les taux et latences proviennent de Gold. Les effectifs de questions suivent la sélection. [Vues, filtres et mesures](../specifications/DASHBOARD.md) · [Lancement](../README.md#lancer-le-dashboard-streamlit)
 
-| Contrôle | Valeur vérifiée dans l’application |
-| --- | --- |
-| Gemma P1 | 54,12 % de précision, 100,00 % de conformité, 0,463 s |
-| Ministral P3 | 41,25 % de précision, 78,75 % de conformité, 1,092 s |
-| Précision P3−P1 | −2,08 points pour Gemma et −12,51 points pour Ministral |
-| Ministral P3, vrai/faux | 34,60 % de réussite, −15,40 points sous le hasard, 58,05 % de conformité |
-| Questions | 1 379 réussies par les six configurations, 1 278 ratées par les six et 2 633 mixtes |
-| Échecs communs | 308 consensus incorrects (207 QCM et 101 vrai/faux), 970 autres échecs. Part des consensus de 24,10 %. |
+Cinq tests automatisés Streamlit couvrent les dimensions des sept marts, les valeurs de référence, les graphiques des sept vues, les filtres, la recherche, les sélections vides et la réinitialisation. Le serveur local a répondu en HTTP 200. Chromium a vérifié la navigation et les interactions sur le dashboard, et les captures ont été inspectées à 1 440 × 1 050 pixels. Les empreintes SHA-256 des 263 fichiers de `data/` et `dbt/`, base DuckDB comprise, concordent avant et après le lot 9.
 
-Cinq tests automatisés Streamlit couvrent les dimensions des sept marts, les valeurs de référence, les graphiques des sept vues, les filtres, la recherche, les sélections vides et la réinitialisation. Le serveur local a répondu en HTTP 200. Chromium a vérifié la navigation et les interactions sur le dashboard, et les captures ont été inspectées à 1 440 × 1 050 pixels. Les 16 modèles et 41 tests dbt correspondent au jalon Gold validé. Les empreintes SHA-256 des 263 fichiers de `data/` et `dbt/`, base DuckDB comprise, concordent avant et après le lot 9.
-
-## Lot 9 bis · Refonte ergonomique du dashboard
+#### Lot 9 bis · Refonte ergonomique du dashboard
 
 Le bandeau introduit le benchmark et quatre questions guident le parcours. Les filtres courts deviennent des boutons segmentés à choix unique ou multiples selon le grain. Les catégories restent accessibles par liste déroulante. Les cartes présentent des valeurs Gold et les encadrés « À retenir » suivent les filtres de la vue. La comparaison par catégorie propose aussi des points reliés, et les cartes thermiques affichent les taux dans les cellules. La fiche ludique sélectionne une question parmi les résultats filtrés et masque sa réponse jusqu’au clic. [Parcours et filtres](../specifications/DASHBOARD.md) · [Choix de conception](DECISIONS.md#dec-039--guider-lexploration-du-dashboard)
 
 Les cinq tests de non-régression et le test de la fiche interactive passent. Les contrôles couvrent l’exactitude des KPI, les filtres, les sélections vides, la réinitialisation par vue et le retour à une réponse masquée quand la question change. La vérification Chromium à 1 440 pixels de largeur a produit une capture par onglet et contrôlé les filtres, la réinitialisation au clavier, la comparaison par catégorie, la carte thermique, le repère du hasard et la révélation d’une réponse avec consensus. Les SHA-256 des 263 fichiers de `data/` et `dbt/`, base DuckDB comprise, concordent avant et après le lot 9 bis.
 
-Après la validation visuelle, le bandeau présente les six chiffres clés vérifiés dans Gold et indique que les questions originales sont en anglais. Les textes expliquent la sélection de plusieurs boutons, les six configurations et l’unité des écarts. Les mesures sont présentées comme un taux de bonnes réponses et un temps moyen de réponse. La carte de comparaison nomme une hausse, une baisse ou un taux inchangé selon le signe du meilleur écart parmi les résultats filtrés. Les six tests Streamlit existants ont réussi après ces finitions, et le contrôle des empreintes de `data/` et `dbt/` a de nouveau confirmé leur intégrité.
+Après la validation visuelle, le bandeau présente les six chiffres clés vérifiés dans Gold et indique que les questions originales sont en anglais. Les textes expliquent la sélection de plusieurs boutons, les six configurations et l’unité des écarts. Les mesures sont présentées comme un taux de bonnes réponses et un temps moyen de réponse. La carte de comparaison nomme une hausse, une baisse ou un taux inchangé selon le signe du meilleur écart parmi les résultats filtrés. Après ces finitions, les six tests Streamlit ont de nouveau réussi et les empreintes de `data/` et `dbt/` concordaient.
 
-## Analyse exploratoire par familles OpenTDB
+#### Analyse exploratoire par familles OpenTDB
 
 L’analyse SQL a porté exclusivement sur `gold.mart_category` dans DuckDB en lecture seule. Elle a réuni les dix catégories préfixées `Entertainment: ` sous Entertainment, puis les catégories Science & Nature, Computers, Mathematics et Gadgets (identifiants 17, 18, 19 et 30) sous Science. Les dix autres catégories sont restées individuelles. Chaque catégorie appartient à une seule des **12 familles**. Le taux de chaque groupe est `100 × SUM(correct_count) / SUM(response_count)`. Pour chacune des six configurations, la somme des familles retrouve exactement les effectifs et les bonnes réponses du mart. Aucune table persistante n’a été créée. L’empreinte de DuckDB concorde avant et après, et l’analyse n’a modifié ni le pipeline ni le dashboard.
 
@@ -485,3 +544,70 @@ L’analyse SQL a porté exclusivement sur `gold.mart_category` dans DuckDB en l
 - **Comparaison des prompts.** Art arrive en tête pour les deux modèles à P1 et P2, puis Mythology à P3. À P3, Gemma devance Ministral dans les 12 familles et les 24 catégories. Entertainment représente 349 des 571 bonnes réponses supplémentaires de Gemma à P3, soit 61,12 % de l’écart net sur ce prompt.
 
 Les résultats décrivent la composition réelle du corpus OpenTDB. Les effectifs inégaux et parfois faibles rendent les rangs descriptifs. Le mart agrégé ne permet ni de tester les écarts question par question ni de séparer les réponses fausses des réponses hors format. Une future hiérarchie pourrait ajouter une vue de synthèse par famille avec accès aux catégories d’origine et affichage des effectifs à chaque niveau. [Décision exploratoire](DECISIONS.md#dec-040--documenter-le-regroupement-exploratoire-opentdb)
+
+### Procédures de rejeu
+
+La [reconstruction analytique](../README.md#reconstruction-analytique-et-rejeu-intégral) part des Parquet publiés. Les commandes ci-dessous décrivent les opérations amont et les reprises historiques. Les exécuter dans une copie de travail distincte pour préserver les fichiers publiés. Utiliser l’environnement Python du README et activer `.venv`.
+
+#### Collecte et préparation Silver
+
+Installer `requests` en plus des dépendances du README. Les scripts d’extraction utilisent l’API JSON OpenTDB sans clé, avec au plus 50 questions par appel et un intervalle de cinq secondes par adresse IP. La collecte complète s’appuie sur un jeton de session et un état de reprise local. [API OpenTDB](https://opentdb.com/api_config.php) · [Architecture Bronze](ARCHITECTURE.md#bronze)
+
+```bash
+python -m pip install requests
+python exploration.py
+
+repertoire_collecte="$(mktemp -d)" &&
+cp collect_opentdb.py collect_opentdb_complet.py exploration.py "$repertoire_collecte/" &&
+(cd "$repertoire_collecte" && python collect_opentdb.py)
+
+(cd "${repertoire_collecte:?Répertoire de collecte requis}" &&
+ python collect_opentdb_complet.py && python exploration.py)
+```
+
+Le premier appel à `exploration.py` examine le CSV publié. Dans le répertoire séparé, le script complet sauvegarde l’échantillon de 50 questions dans `questions_test_50.csv`, puis écrit son propre CSV. Une nouvelle collecte peut fournir un corpus différent. Les arbitrages du script Silver portent sur les données de référence du projet.
+
+Depuis la racine de la copie du dépôt, lancer les étapes suivantes sur le Bronze de référence. `python preparer_silver.py` sans sous-commande enchaîne la conversion et le dédoublonnage. La finalisation lit aussi le classement linguistique versionné et écrit le candidat et son rapport dans `data/silver/candidat_final_5290/`. `controler-doublons` vérifie le corpus courant `questions_clean.parquet` en lecture seule. Les commandes d’inférence ci-dessous utilisent ce corpus versionné, dont l’empreinte est contrôlée.
+
+```bash
+python preparer_silver.py convertir
+python preparer_silver.py dedoublonner
+python preparer_silver.py normaliser
+python preparer_silver.py finaliser
+python preparer_silver.py controler-doublons
+```
+
+#### Pilote et benchmark Gemma
+
+L’ancienne commande `python preparer_silver.py pilote` produit les deux fichiers de [l’essai provisoire](#constats-sur-lessai-provisoire). Pour le pilote mesuré, `python pilote_gemma.py manifeste` contrôle le manifeste versionné dans `pilot_lot2/`. `python pilote_gemma.py structurer` régénère les deux Silver P1/P2 du pilote à partir de leurs Bronze versionnés. Ces commandes fonctionnent hors ligne. Avec le journal local, `python pilote_gemma.py reconstruire-bronze` réexporte les mesures et `python pilote_gemma.py bilan` affiche les métriques.
+
+L’inférence requiert le serveur LM Studio sur l’interface locale, `curl` et la CLI `lms`. Les commandes illustrent les versions de la campagne. Le script de pilote peut charger Gemma si aucune instance du modèle n’est chargée. Pour une instance dédiée, utiliser `lms load google/gemma-4-e2b --identifier gemma-pilote-lot3 --context-length 4096`. Sous WSL avec LM Studio sous Windows, utiliser `--lms lms.exe` là où l’option existe et `--curl /mnt/c/Windows/System32/curl.exe` si la boucle locale Windows est nécessaire.
+
+```bash
+version_lm_studio='0.4.28+2'
+moteur_lm_studio='llama.cpp-win-x86_64-vulkan-avx2@2.80.1'
+
+python pilote_gemma.py executer --lm-studio-version "$version_lm_studio" --runtime "$moteur_lm_studio"
+python pilote_gemma.py executer-p3 --lm-studio-version "$version_lm_studio" --runtime "$moteur_lm_studio"
+python benchmark_gemma.py preparer
+python benchmark_gemma.py verifier --lm-studio-version "$version_lm_studio" --runtime "$moteur_lm_studio"
+python benchmark_gemma.py executer --lm-studio-version "$version_lm_studio" --runtime "$moteur_lm_studio"
+python benchmark_gemma.py executer --p3 --lm-studio-version "$version_lm_studio" --runtime "$moteur_lm_studio"
+python benchmark_gemma.py bilan --p3
+```
+
+`preparer` initialise le répertoire du lot 4 depuis le journal du pilote si le répertoire n’existe pas. Dans un clone, ce répertoire contient déjà les exports versionnés. Pour une nouvelle campagne, réserver les chemins d’exécution dans la copie de travail en déplaçant ces exports vers une sauvegarde. Pour une reprise historique, utiliser le manifeste complet et les journaux compatibles. `python benchmark_gemma.py bilan` lit le journal P1/P2 fermé. `--p3` ajoute le journal P3 au bilan. [Ordre et contrôles de reprise](ARCHITECTURE.md#mesures-bronze-et-résultats-silver)
+
+#### Pilote et benchmark Ministral
+
+Le pilote requiert le manifeste commun de 30 questions et l’instance Ministral Instruct Q4_K_M décrite dans l’architecture. Le benchmark complet dépend du plan Gemma et des 90 mesures du pilote Ministral. Les commandes supposent les mêmes variables de version et de moteur que ci-dessus.
+
+```bash
+python pilote_bonsai.py manifeste
+python pilote_ministral.py executer --lm-studio-version "$version_lm_studio"
+python benchmark_ministral.py preparer
+python benchmark_ministral.py executer --lm-studio-version "$version_lm_studio" --runtime "$moteur_lm_studio"
+python benchmark_ministral.py bilan
+```
+
+En reprise, le script exige le journal compatible avec les résultats déjà exportés. Le bilan des deux modèles lit les journaux complets. Une nouvelle campagne doit conserver ses propres mesures et configurations. [Pilote Ministral](ARCHITECTURE.md#pilote-ministral-3-3b-instruct-2512) · [Benchmark complet](ARCHITECTURE.md#benchmark-complet-ministral-du-lot-4)
