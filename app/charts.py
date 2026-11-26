@@ -6,11 +6,14 @@ from gold import MODELS, PROMPTS
 
 
 NAVY = "#223858"
-TEAL = "#087b71"
-ORANGE = "#b54f15"
-GREEN = "#18704a"
-AMBER = "#986016"
-RED = "#ad394a"
+# Palette turquoise et orange : trois turquoises, deux oranges, un corail.
+TEAL = "#2FB5A3"         # Gemma
+TEAL_LIGHT = "#45C9B8"   # résultats mixtes, fin du dégradé Gemma
+TEAL_DEEP = "#1E9C8F"    # réponses correctes, gains
+ORANGE = "#F59A4F"       # Ministral, consensus incorrects
+ORANGE_LIGHT = "#F7B27A" # incorrectes conformes, fin du dégradé Ministral
+CORAL = "#EF7F67"        # hors format, pertes, échecs
+GREEN, AMBER, RED = TEAL_DEEP, ORANGE_LIGHT, CORAL
 GRAY = "#566777"
 MODEL_COLORS = dict(zip(MODELS.values(), (TEAL, ORANGE), strict=True))
 

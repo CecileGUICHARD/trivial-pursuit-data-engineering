@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from charts import (
-    AMBER, GRAY, GREEN, MODEL_COLORS, NAVY, ORANGE, RED, TEAL,
+    AMBER, CORAL, GRAY, GREEN, MODEL_COLORS, NAVY, ORANGE, ORANGE_LIGHT, RED, TEAL, TEAL_DEEP, TEAL_LIGHT,
     connected_categories, counts_bars, horizontal_bars, model_bars, show, success_with_chance,
 )
 from gold import DIFFICULTIES, MODELS, OUTCOMES, PROMPT_LABELS, PROMPTS, TYPES, config_labels, number, options, pair_label
@@ -144,7 +144,7 @@ def prompt_comparison(frame):
         fig.add_bar(x=labels, y=data.gain_count, name="Gains", marker_color=GREEN,
                     texttemplate="%{y:,d}", textposition="outside", cliponaxis=False,
                     hovertemplate="%{x}<br>%{y:,d} gains<extra></extra>")
-        fig.add_bar(x=labels, y=-data.loss_count, name="Pertes", marker_color=AMBER, customdata=data.loss_count,
+        fig.add_bar(x=labels, y=-data.loss_count, name="Pertes", marker_color=CORAL, customdata=data.loss_count,
                     texttemplate="%{y:,d}", textposition="outside", cliponaxis=False,
                     hovertemplate="%{x}<br>%{customdata:,d} pertes<extra></extra>")
         fig.update_layout(barmode="relative")
@@ -213,7 +213,7 @@ def categories(frame):
             with slots[index % len(slots)]:
                 st.subheader(model)
                 values = rows.pivot(index="category", columns="Prompt", values="success_pct")
-                heat_end = "#ffd1a8" if MODEL_COLORS.get(model) == ORANGE else "#86d3c6"
+                heat_end = ORANGE_LIGHT if MODEL_COLORS.get(model) == ORANGE else TEAL_LIGHT
                 fig = go.Figure(go.Heatmap(
                     x=values.columns, y=values.index, z=values.to_numpy(), zmin=0, zmax=100,
                     colorscale=[[0, "#f7fafb"], [1, heat_end]], xgap=2, ygap=2,
@@ -349,10 +349,10 @@ def question_outcomes(frame):
     outcomes, shared, by_type = st.columns(3)
     with outcomes:
         st.subheader("Résultats sur les six configurations")
-        show(counts_bars(list(OUTCOMES.values()), totals, [GREEN, RED, NAVY]), "outcomes_distribution", height=285)
+        show(counts_bars(list(OUTCOMES.values()), totals, [TEAL_DEEP, CORAL, TEAL_LIGHT]), "outcomes_distribution", height=285)
     with shared:
         st.subheader("Échecs communs")
-        show(counts_bars(["Consensus incorrects", "Autres échecs"], [len(consensus), len(failures) - len(consensus)], [AMBER, RED]), "outcomes_shared", height=285)
+        show(counts_bars(["Consensus incorrects", "Autres échecs"], [len(consensus), len(failures) - len(consensus)], [ORANGE, CORAL]), "outcomes_shared", height=285)
         if failures.empty:
             st.caption("Part des consensus indisponible pour cette sélection sans échec commun.")
         else:
@@ -361,7 +361,7 @@ def question_outcomes(frame):
         st.subheader("Consensus incorrects par type")
         type_values = ["multiple", "boolean"]
         counts = consensus.type.value_counts().reindex(type_values, fill_value=0)
-        show(counts_bars([TYPES[value] for value in type_values], counts, [AMBER, AMBER]), "outcomes_consensus_type", height=285)
+        show(counts_bars([TYPES[value] for value in type_values], counts, [ORANGE, ORANGE]), "outcomes_consensus_type", height=285)
 
 
 def question_details(frame, data):
